@@ -1,0 +1,240 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>NPC Simulator Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              void: "#080914",
+              panel: "#101320",
+              neonCyan: "#21f7ff",
+              neonPink: "#ff2bd6",
+              acid: "#b6ff3b"
+            },
+            boxShadow: {
+              neon: "0 0 24px rgba(33, 247, 255, 0.18)",
+              pink: "0 0 24px rgba(255, 43, 214, 0.18)"
+            }
+          }
+        }
+      };
+    </script>
+    <style>
+      :root {
+        color-scheme: dark;
+      }
+
+      body {
+        background:
+          linear-gradient(rgba(33, 247, 255, 0.04) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(255, 43, 214, 0.035) 1px, transparent 1px),
+          radial-gradient(circle at 15% 10%, rgba(33, 247, 255, 0.16), transparent 28rem),
+          radial-gradient(circle at 85% 8%, rgba(255, 43, 214, 0.12), transparent 30rem),
+          #080914;
+        background-size: 42px 42px, 42px 42px, auto, auto, auto;
+      }
+
+      .scanline::before {
+        content: "";
+        position: fixed;
+        inset: 0;
+        pointer-events: none;
+        background: linear-gradient(rgba(255,255,255,0.025) 50%, rgba(0,0,0,0.04) 50%);
+        background-size: 100% 4px;
+        mix-blend-mode: overlay;
+        opacity: 0.35;
+      }
+
+      pre {
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+      }
+    </style>
+  </head>
+  <body class="scanline min-h-screen text-slate-100 antialiased">
+    <main class="mx-auto grid min-h-screen max-w-7xl gap-4 px-4 py-4 lg:grid-cols-[360px_minmax(0,1fr)] lg:px-6 lg:py-6">
+      <section class="flex min-h-[420px] flex-col rounded border border-cyan-400/25 bg-panel/90 shadow-neon backdrop-blur">
+        <div class="border-b border-cyan-400/20 px-5 py-4">
+          <p class="text-xs font-semibold uppercase tracking-[0.24em] text-neonCyan">NPC Generator</p>
+          <h1 class="mt-2 text-2xl font-bold text-white">Cyberpunk Control Deck</h1>
+        </div>
+
+        <form id="generatorForm" class="flex flex-1 flex-col gap-4 p-5">
+          <label class="block">
+            <span class="mb-2 block text-sm font-medium text-slate-300">컨셉 입력</span>
+            <textarea
+              id="conceptInput"
+              class="min-h-64 w-full resize-y rounded border border-slate-700 bg-void/90 p-4 text-sm leading-6 text-slate-100 outline-none transition placeholder:text-slate-500 focus:border-neonCyan focus:ring-2 focus:ring-cyan-400/20"
+              placeholder="예: 기억을 잃은 우주 정거장 정비공. 플레이어가 과거의 사고를 캐낼수록 방어적이지만 따뜻한 성격이 드러난다."
+              required
+            ></textarea>
+          </label>
+
+          <div class="rounded border border-slate-800 bg-void/70 p-3">
+            <div class="flex items-center justify-between gap-3 text-xs text-slate-400">
+              <span>Endpoint</span>
+              <code class="truncate text-neonCyan">POST /api/v1/generate</code>
+            </div>
+          </div>
+
+          <button
+            id="generateButton"
+            type="submit"
+            class="mt-auto rounded border border-neonPink/70 bg-neonPink px-4 py-3 text-sm font-bold uppercase tracking-[0.18em] text-white shadow-pink transition hover:-translate-y-0.5 hover:bg-fuchsia-500 focus:outline-none focus:ring-2 focus:ring-neonPink/40 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0"
+          >
+            생성
+          </button>
+
+          <p id="statusText" class="min-h-5 text-sm text-slate-400">백엔드 연결 대기 중</p>
+        </form>
+      </section>
+
+      <section class="grid min-h-[680px] gap-4 xl:grid-cols-2">
+        <article class="flex min-h-0 flex-col rounded border border-cyan-400/25 bg-panel/90 shadow-neon backdrop-blur">
+          <div class="flex items-center justify-between gap-3 border-b border-cyan-400/20 px-5 py-4">
+            <div>
+              <p class="text-xs font-semibold uppercase tracking-[0.22em] text-neonCyan">Gemini Design JSON</p>
+              <h2 class="mt-1 text-lg font-semibold text-white">NPC 기획 블루프린트</h2>
+            </div>
+            <button data-copy="blueprintOutput" class="rounded border border-slate-700 px-3 py-2 text-xs text-slate-300 transition hover:border-neonCyan hover:text-neonCyan">
+              COPY
+            </button>
+          </div>
+          <div class="min-h-0 flex-1 overflow-auto p-5">
+            <pre class="min-h-full rounded border border-slate-800 bg-void/90 p-4 text-sm leading-6 text-slate-200"><code id="blueprintOutput">생성 결과가 여기에 JSON 코드 블록으로 표시됩니다.</code></pre>
+          </div>
+        </article>
+
+        <article class="flex min-h-0 flex-col rounded border border-fuchsia-400/25 bg-panel/90 shadow-pink backdrop-blur">
+          <div class="flex items-center justify-between gap-3 border-b border-fuchsia-400/20 px-5 py-4">
+            <div>
+              <p class="text-xs font-semibold uppercase tracking-[0.22em] text-neonPink">Unity C# Output</p>
+              <h2 class="mt-1 text-lg font-semibold text-white">FSM 컨트롤러 코드</h2>
+            </div>
+            <button data-copy="codeOutput" class="rounded border border-slate-700 px-3 py-2 text-xs text-slate-300 transition hover:border-neonPink hover:text-neonPink">
+              COPY
+            </button>
+          </div>
+          <div class="min-h-0 flex-1 overflow-auto p-5">
+            <pre class="min-h-full rounded border border-slate-800 bg-void/90 p-4 text-sm leading-6 text-slate-200"><code id="codeOutput">생성 결과가 여기에 C# 코드 블록으로 표시됩니다.</code></pre>
+          </div>
+        </article>
+
+        <article class="rounded border border-lime-300/25 bg-panel/90 shadow-neon backdrop-blur xl:col-span-2">
+          <div class="border-b border-lime-300/20 px-5 py-3">
+            <p class="text-xs font-semibold uppercase tracking-[0.22em] text-acid">Pipeline Logs</p>
+          </div>
+          <div id="logOutput" class="grid gap-2 p-5 text-sm text-slate-300 sm:grid-cols-3">
+            <span class="rounded border border-slate-800 bg-void/80 px-3 py-2">대기</span>
+          </div>
+        </article>
+      </section>
+    </main>
+
+    <script>
+      const form = document.getElementById("generatorForm");
+      const conceptInput = document.getElementById("conceptInput");
+      const generateButton = document.getElementById("generateButton");
+      const statusText = document.getElementById("statusText");
+      const blueprintOutput = document.getElementById("blueprintOutput");
+      const codeOutput = document.getElementById("codeOutput");
+      const logOutput = document.getElementById("logOutput");
+
+      const apiBaseUrl = window.location.protocol === "file:" ? "http://127.0.0.1:8000" : window.location.origin;
+      const apiUrl = `${apiBaseUrl}/api/v1/generate`;
+
+      function formatJson(value) {
+        if (typeof value !== "string") {
+          return JSON.stringify(value, null, 2);
+        }
+
+        try {
+          return JSON.stringify(JSON.parse(value), null, 2);
+        } catch {
+          return value;
+        }
+      }
+
+      function stripCodeFence(value) {
+        return String(value || "")
+          .replace(/^```(?:csharp|cs|c#)?\s*/i, "")
+          .replace(/\s*```$/i, "")
+          .trim();
+      }
+
+      function renderLogs(logs) {
+        const items = Array.isArray(logs) && logs.length ? logs : ["완료 로그가 없습니다."];
+        logOutput.innerHTML = items
+          .map((item) => `<span class="rounded border border-slate-800 bg-void/80 px-3 py-2">${escapeHtml(item)}</span>`)
+          .join("");
+      }
+
+      function escapeHtml(value) {
+        return String(value)
+          .replaceAll("&", "&amp;")
+          .replaceAll("<", "&lt;")
+          .replaceAll(">", "&gt;")
+          .replaceAll('"', "&quot;")
+          .replaceAll("'", "&#039;");
+      }
+
+      async function copyOutput(targetId, button) {
+        const text = document.getElementById(targetId).textContent;
+        await navigator.clipboard.writeText(text);
+        const original = button.textContent;
+        button.textContent = "COPIED";
+        setTimeout(() => {
+          button.textContent = original;
+        }, 1100);
+      }
+
+      form.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        const concept = conceptInput.value.trim();
+        if (!concept) return;
+
+        generateButton.disabled = true;
+        generateButton.textContent = "생성 중";
+        statusText.textContent = "Gemini 에이전트 파이프라인 실행 중...";
+        blueprintOutput.textContent = "응답 대기 중...";
+        codeOutput.textContent = "응답 대기 중...";
+        logOutput.innerHTML = '<span class="rounded border border-slate-800 bg-void/80 px-3 py-2">작업 시작</span>';
+
+        try {
+          const response = await fetch(apiUrl, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ concept })
+          });
+
+          const payload = await response.json();
+          if (!response.ok) {
+            throw new Error(payload.detail || `HTTP ${response.status}`);
+          }
+
+          blueprintOutput.textContent = formatJson(payload.blueprint);
+          codeOutput.textContent = stripCodeFence(payload.code);
+          renderLogs(payload.logs);
+          statusText.textContent = payload.status === "SUCCESS" ? "생성 완료" : `상태: ${payload.status || "UNKNOWN"}`;
+        } catch (error) {
+          statusText.textContent = `오류: ${error.message}`;
+          blueprintOutput.textContent = "요청 처리 중 오류가 발생했습니다.";
+          codeOutput.textContent = "";
+          renderLogs(["백엔드 서버와 API 키 설정을 확인하세요."]);
+        } finally {
+          generateButton.disabled = false;
+          generateButton.textContent = "생성";
+        }
+      });
+
+      document.querySelectorAll("[data-copy]").forEach((button) => {
+        button.addEventListener("click", () => copyOutput(button.dataset.copy, button));
+      });
+    </script>
+  </body>
+</html>
