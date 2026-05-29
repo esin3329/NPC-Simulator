@@ -125,7 +125,22 @@
           </div>
         </article>
 
-        <article class="rounded border border-lime-300/25 bg-panel/90 shadow-neon backdrop-blur xl:col-span-2">
+        <article class="flex min-h-[260px] flex-col rounded border border-lime-300/25 bg-panel/90 shadow-neon backdrop-blur">
+          <div class="flex items-center justify-between gap-3 border-b border-lime-300/20 px-5 py-4">
+            <div>
+              <p class="text-xs font-semibold uppercase tracking-[0.22em] text-acid">QA Agent</p>
+              <h2 class="mt-1 text-lg font-semibold text-white">검증 및 자가수정 리포트</h2>
+            </div>
+            <button data-copy="qaOutput" class="rounded border border-slate-700 px-3 py-2 text-xs text-slate-300 transition hover:border-lime-300 hover:text-acid">
+              COPY
+            </button>
+          </div>
+          <div class="min-h-0 flex-1 overflow-auto p-5">
+            <pre class="min-h-full rounded border border-slate-800 bg-void/90 p-4 text-sm leading-6 text-slate-200"><code id="qaOutput">QA 결과가 여기에 표시됩니다.</code></pre>
+          </div>
+        </article>
+
+        <article class="rounded border border-lime-300/25 bg-panel/90 shadow-neon backdrop-blur">
           <div class="border-b border-lime-300/20 px-5 py-3">
             <p class="text-xs font-semibold uppercase tracking-[0.22em] text-acid">Pipeline Logs</p>
           </div>
@@ -143,6 +158,7 @@
       const statusText = document.getElementById("statusText");
       const blueprintOutput = document.getElementById("blueprintOutput");
       const codeOutput = document.getElementById("codeOutput");
+      const qaOutput = document.getElementById("qaOutput");
       const logOutput = document.getElementById("logOutput");
 
       const apiBaseUrl = window.location.protocol === "file:" ? "http://127.0.0.1:8000" : window.location.origin;
@@ -203,6 +219,7 @@
         statusText.textContent = "Gemini 에이전트 파이프라인 실행 중...";
         blueprintOutput.textContent = "응답 대기 중...";
         codeOutput.textContent = "응답 대기 중...";
+        qaOutput.textContent = "QA 대기 중...";
         logOutput.innerHTML = '<span class="rounded border border-slate-800 bg-void/80 px-3 py-2">작업 시작</span>';
 
         try {
@@ -219,12 +236,17 @@
 
           blueprintOutput.textContent = formatJson(payload.blueprint);
           codeOutput.textContent = stripCodeFence(payload.code);
+          qaOutput.textContent = formatJson({
+            final_report: payload.qa_report,
+            healing_history: payload.self_healing
+          });
           renderLogs(payload.logs);
-          statusText.textContent = payload.status === "SUCCESS" ? "생성 완료" : `상태: ${payload.status || "UNKNOWN"}`;
+          statusText.textContent = payload.status === "SUCCESS" ? "생성 및 QA 완료" : `상태: ${payload.status || "UNKNOWN"}`;
         } catch (error) {
           statusText.textContent = `오류: ${error.message}`;
           blueprintOutput.textContent = "요청 처리 중 오류가 발생했습니다.";
           codeOutput.textContent = "";
+          qaOutput.textContent = "";
           renderLogs(["백엔드 서버와 API 키 설정을 확인하세요."]);
         } finally {
           generateButton.disabled = false;
