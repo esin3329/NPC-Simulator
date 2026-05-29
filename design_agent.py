@@ -1,8 +1,15 @@
-import os
 from google import genai
 from google.genai import types
 
-def run_design_agent(user_concept: str, genre: str = "RPG") -> str:
+from schemas import NPC_BLUEPRINT_RESPONSE_SCHEMA
+
+
+def run_design_agent(
+    user_prompt: str,
+    genre: str = "RPG",
+    lore_summary: str = "Distopian Incinerator Zone",
+    max_dialogue_depth: int = 3,
+) -> str:
     # 2.5-flash 무료 쿼터 및 결제 안정 환경으로 완벽 대응
     client = genai.Client()
     
@@ -11,61 +18,26 @@ def run_design_agent(user_concept: str, genre: str = "RPG") -> str:
         "Analyze the world concept and generate a fully realized NPC system profile, "
         "a branching dialogue tree, and a 3-turn virtual validation conversation log. "
         "System names, IDs, operators, and keys must be strictly in English, "
-        "and display names, options, and dialogue texts must be beautifully written in Korean."
+        "and display names, options, and dialogue texts must be beautifully written in Korean. "
+        "Every dialogue node must match the documented schema: speaker, state_context, "
+        "dialogue_text, and options. Every option must include option_text, next_node_id, "
+        "and required_conditions."
     )
-    
-    # XPRIZE 가산점용 시뮬레이션 가드레일이 탑재된 확장 스키마
-    advanced_schema = {
-        "type": "OBJECT",
-        "properties": {
-            "npc_profile": {
-                "type": "OBJECT",
-                "properties": {
-                    "system_name": {"type": "STRING"},
-                    "display_name": {"type": "STRING"},
-                    "personality_tags": {"type": "ARRAY", "items": {"type": "STRING"}},
-                    "faction": {"type": "STRING"},
-                    "base_states": {"type": "ARRAY", "items": {"type": "STRING"}}
-                },
-                "required": ["system_name", "display_name", "personality_tags", "faction", "base_states"]
-            },
-            "dialogue_system": {
-                "type": "OBJECT",
-                "properties": {
-                    "root_node": {"type": "STRING"},
-                    "nodes": {"type": "OBJECT"}
-                },
-                "required": ["root_node", "nodes"]
-            },
-            "runtime_simulation_sandbox": {
-                "type": "OBJECT",
-                "properties": {
-                    "validation_status": {"type": "STRING"},
-                    "agent_conversations": {
-                        "type": "ARRAY",
-                        "items": {
-                            "type": "OBJECT",
-                            "properties": {
-                                "turn": {"type": "INTEGER"},
-                                "player_action": {"type": "STRING"},
-                                "npc_response": {"type": "STRING"}
-                            }
-                        }
-                    }
-                },
-                "required": ["validation_status", "agent_conversations"]
-            }
-        },
-        "required": ["npc_profile", "dialogue_system", "runtime_simulation_sandbox"]
-    }
+
+    contents = (
+        f"Genre: {genre}\n"
+        f"World context: {lore_summary}\n"
+        f"Max dialogue depth: {max_dialogue_depth}\n"
+        f"Concept: {user_prompt}"
+    )
     
     response = client.models.generate_content(
         model='gemini-2.5-flash',
-        contents=f"Genre: {genre}\nWorld context: Distopian Incinerator Zone\nConcept: {user_concept}",
+        contents=contents,
         config=types.GenerateContentConfig(
             system_instruction=system_instruction,
             response_mime_type="application/json",
-            response_schema=advanced_schema,
+            response_schema=NPC_BLUEPRINT_RESPONSE_SCHEMA,
             temperature=0.3,
         ),
     )

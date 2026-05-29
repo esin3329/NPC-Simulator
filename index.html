@@ -209,7 +209,14 @@
           const response = await fetch(apiUrl, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ concept })
+            body: JSON.stringify({
+              world_setting: {
+                genre: "RPG",
+                lore_summary: "Distopian Incinerator Zone"
+              },
+              user_prompt: concept,
+              max_dialogue_depth: 3
+            })
           });
 
           const payload = await response.json();
