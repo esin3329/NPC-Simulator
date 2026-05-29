@@ -218,6 +218,7 @@
               <div class="flex rounded-md border border-line bg-void/75 p-1">
                 <button type="button" class="tab-btn rounded px-3 py-1.5 text-xs font-medium text-white" data-tab="blueprint">JSON</button>
                 <button type="button" class="tab-btn rounded px-3 py-1.5 text-xs font-medium text-slate-400" data-tab="code">C#</button>
+                <button type="button" class="tab-btn rounded px-3 py-1.5 text-xs font-medium text-slate-400" data-tab="qa">QA</button>
                 <button type="button" class="tab-btn rounded px-3 py-1.5 text-xs font-medium text-slate-400" data-tab="bonus">대사</button>
               </div>
               <button id="copyActiveButton" type="button" title="복사" class="grid h-9 w-9 place-items-center rounded-md border border-line bg-panelSoft text-slate-300 transition hover:border-cyan hover:text-cyan">
@@ -231,6 +232,9 @@
             </div>
             <div id="codePanel" class="tab-panel h-full overflow-auto rounded-md border border-line bg-void/90 p-4" hidden>
               <pre class="min-h-full text-sm leading-6 text-slate-200"><code id="codeOutput">생성 결과가 여기에 C# 코드 블록으로 표시됩니다.</code></pre>
+            </div>
+            <div id="qaPanel" class="tab-panel h-full overflow-auto rounded-md border border-line bg-void/90 p-4" hidden>
+              <pre class="min-h-full text-sm leading-6 text-slate-200"><code id="qaOutput">QA 결과가 여기에 표시됩니다.</code></pre>
             </div>
             <div id="bonusPanel" class="tab-panel h-full overflow-auto rounded-md border border-line bg-void/90 p-4" hidden>
               <pre class="min-h-full text-sm leading-6 text-slate-200"><code id="bonusOutput">보너스 대사가 여기에 표시됩니다.</code></pre>
@@ -261,6 +265,7 @@
       const connectionPill = document.getElementById("connectionPill");
       const blueprintOutput = document.getElementById("blueprintOutput");
       const codeOutput = document.getElementById("codeOutput");
+      const qaOutput = document.getElementById("qaOutput");
       const bonusOutput = document.getElementById("bonusOutput");
       const logOutput = document.getElementById("logOutput");
       const elapsedTime = document.getElementById("elapsedTime");
@@ -425,6 +430,7 @@
         connectionPill.className = "rounded-md border border-amber/30 bg-amber/10 px-2 py-1 text-xs font-medium text-amber";
         blueprintOutput.textContent = "생성 결과가 여기에 JSON 코드 블록으로 표시됩니다.";
         codeOutput.textContent = "생성 결과가 여기에 C# 코드 블록으로 표시됩니다.";
+        qaOutput.textContent = "QA 결과가 여기에 표시됩니다.";
         bonusOutput.textContent = "보너스 대사가 여기에 표시됩니다.";
         renderLogs(["대기"]);
         updateSteps([]);
@@ -467,6 +473,7 @@
         connectionPill.className = "rounded-md border border-cyan/30 bg-cyan/10 px-2 py-1 text-xs font-medium text-cyan";
         blueprintOutput.textContent = "응답 대기 중...";
         codeOutput.textContent = "응답 대기 중...";
+        qaOutput.textContent = "QA 대기 중...";
         bonusOutput.textContent = "응답 대기 중...";
         renderLogs(["작업 시작"]);
         updateSteps([]);
@@ -487,11 +494,15 @@
 
           blueprintOutput.textContent = formatJson(payload.blueprint);
           codeOutput.textContent = stripCodeFence(payload.code);
+          qaOutput.textContent = formatJson({
+            final_report: payload.qa_report,
+            healing_history: payload.self_healing
+          });
           bonusOutput.textContent = renderBonusAssets(payload.bonus_assets);
           renderLogs(payload.logs);
           updateSteps(payload.logs);
           renderSnapshot(payload.blueprint, payload.bonus_assets);
-          statusText.textContent = payload.status === "SUCCESS" ? "생성 완료" : `상태: ${payload.status || "UNKNOWN"}`;
+          statusText.textContent = payload.status === "SUCCESS" ? "생성 및 QA 완료" : `상태: ${payload.status || "UNKNOWN"}`;
           connectionPill.textContent = "완료";
           connectionPill.className = "rounded-md border border-acid/30 bg-acid/10 px-2 py-1 text-xs font-medium text-acid";
         } catch (error) {
@@ -500,6 +511,7 @@
           connectionPill.className = "rounded-md border border-rose/30 bg-rose/10 px-2 py-1 text-xs font-medium text-rose";
           blueprintOutput.textContent = "요청 처리 중 오류가 발생했습니다.";
           codeOutput.textContent = "";
+          qaOutput.textContent = "";
           bonusOutput.textContent = "";
           renderLogs(["백엔드 서버와 API 키 설정을 확인하세요."]);
         } finally {
