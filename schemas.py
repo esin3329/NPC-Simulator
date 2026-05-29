@@ -1,4 +1,6 @@
-from pydantic import BaseModel, Field
+from typing import Any
+
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class WorldSetting(BaseModel):
@@ -10,6 +12,64 @@ class GenerateNpcRequest(BaseModel):
     world_setting: WorldSetting = Field(default_factory=WorldSetting)
     user_prompt: str
     max_dialogue_depth: int = Field(default=3, ge=1, le=8)
+
+
+class DialogueOption(BaseModel):
+    option_text: str
+    next_node_id: str
+    required_conditions: dict[str, Any] = Field(default_factory=dict)
+
+
+class DialogueNode(BaseModel):
+    speaker: str
+    state_context: str
+    dialogue_text: str
+    options: list[DialogueOption] = Field(default_factory=list)
+
+
+class NpcProfile(BaseModel):
+    system_name: str
+    display_name: str
+    personality_tags: list[str] = Field(default_factory=list)
+    faction: str
+    base_states: list[str] = Field(min_length=1)
+
+
+class DialogueSystem(BaseModel):
+    root_node: str
+    nodes: dict[str, DialogueNode] = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def validate_node_links(self) -> "DialogueSystem":
+        if self.root_node not in self.nodes:
+            raise ValueError("dialogue_system.root_node must reference an existing node id")
+
+        for node_id, node in self.nodes.items():
+            for index, option in enumerate(node.options):
+                if option.next_node_id and option.next_node_id not in self.nodes:
+                    raise ValueError(
+                        f"dialogue_system.nodes.{node_id}.options.{index}.next_node_id references a missing node"
+                    )
+        return self
+
+
+class AgentConversation(BaseModel):
+    turn: int
+    player_action: str
+    npc_response: str
+
+
+class RuntimeSimulationSandbox(BaseModel):
+    validation_status: str
+    agent_conversations: list[AgentConversation] = Field(min_length=3)
+
+
+class NpcBlueprint(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    npc_profile: NpcProfile
+    dialogue_system: DialogueSystem
+    runtime_simulation_sandbox: RuntimeSimulationSandbox
 
 
 DIALOGUE_OPTION_SCHEMA = {

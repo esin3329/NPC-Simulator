@@ -224,6 +224,15 @@
               <button id="copyActiveButton" type="button" title="복사" class="grid h-9 w-9 place-items-center rounded-md border border-line bg-panelSoft text-slate-300 transition hover:border-cyan hover:text-cyan">
                 <i data-lucide="copy" class="h-4 w-4"></i>
               </button>
+              <select id="downloadTarget" title="다운로드 대상" class="h-9 rounded-md border border-line bg-panelSoft px-2 text-xs text-slate-200 outline-none transition hover:border-cyan focus:border-cyan">
+                <option value="blueprint">JSON blueprint</option>
+                <option value="code">Unity C# code</option>
+                <option value="qa">QA report</option>
+                <option value="bundle">Full bundle</option>
+              </select>
+              <button id="downloadButton" type="button" title="다운로드" class="grid h-9 w-9 place-items-center rounded-md border border-line bg-panelSoft text-slate-300 transition hover:border-acid hover:text-acid">
+                <i data-lucide="download" class="h-4 w-4"></i>
+              </button>
             </div>
           </div>
           <div class="min-h-0 flex-1 overflow-hidden p-5">
@@ -270,6 +279,8 @@
       const logOutput = document.getElementById("logOutput");
       const elapsedTime = document.getElementById("elapsedTime");
       const copyActiveButton = document.getElementById("copyActiveButton");
+      const downloadTarget = document.getElementById("downloadTarget");
+      const downloadButton = document.getElementById("downloadButton");
       const npcName = document.getElementById("npcName");
       const validationBadge = document.getElementById("validationBadge");
       const systemName = document.getElementById("systemName");
@@ -285,6 +296,7 @@
         archive: "폐쇄된 기록 보관소를 지키는 기억 수집가. 잊힌 시민들의 목소리를 보관하지만, 자신의 가장 중요한 기억만은 누군가에게 도난당했다."
       };
       let activeTab = "blueprint";
+      let currentPayload = null;
       let timerId = null;
       let startedAt = 0;
 
@@ -406,6 +418,61 @@
         }, 1000);
       }
 
+      function safeGenerationId() {
+        return currentPayload?.generation_id || `unsaved-${new Date().toISOString().replace(/[:.]/g, "-")}`;
+      }
+
+      function downloadBlob(filename, content, mimeType) {
+        const blob = new Blob([content], { type: mimeType });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        URL.revokeObjectURL(url);
+      }
+
+      function downloadSelectedOutput() {
+        const generationId = safeGenerationId();
+        const target = downloadTarget.value;
+        const bundle = currentPayload || {
+          generation_id: generationId,
+          blueprint: blueprintOutput.textContent,
+          code: codeOutput.textContent,
+          qa_report: qaOutput.textContent,
+          bonus_assets: bonusOutput.textContent,
+          logs: Array.from(logOutput.querySelectorAll("span")).map((item) => item.textContent)
+        };
+
+        const downloads = {
+          blueprint: {
+            filename: `${generationId}-blueprint.json`,
+            mime: "application/json;charset=utf-8",
+            content: formatJson(bundle.blueprint)
+          },
+          code: {
+            filename: `${generationId}-unity-controller.cs`,
+            mime: "text/plain;charset=utf-8",
+            content: stripCodeFence(bundle.code || codeOutput.textContent)
+          },
+          qa: {
+            filename: `${generationId}-qa-report.json`,
+            mime: "application/json;charset=utf-8",
+            content: formatJson(bundle.qa_report || qaOutput.textContent)
+          },
+          bundle: {
+            filename: `${generationId}-generation-bundle.json`,
+            mime: "application/json;charset=utf-8",
+            content: JSON.stringify(bundle, null, 2)
+          }
+        };
+
+        const selected = downloads[target] || downloads.bundle;
+        downloadBlob(selected.filename, selected.content, selected.mime);
+      }
+
       function startTimer() {
         startedAt = performance.now();
         clearInterval(timerId);
@@ -443,11 +510,13 @@
         validationBadge.className = "rounded-md border border-line bg-void/80 px-3 py-1 text-xs text-slate-400";
         tagList.innerHTML = '<span class="rounded-md border border-line bg-panelSoft px-2 py-1 text-xs text-slate-400">태그 대기 중</span>';
         elapsedTime.textContent = "0.0s";
+        currentPayload = null;
       }
 
       conceptInput.addEventListener("input", updateCharCount);
       clearButton.addEventListener("click", resetDashboard);
       copyActiveButton.addEventListener("click", copyActiveOutput);
+      downloadButton.addEventListener("click", downloadSelectedOutput);
 
       document.querySelectorAll(".sample-btn").forEach((button) => {
         button.addEventListener("click", () => {
@@ -481,17 +550,18 @@
         startTimer();
 
         try {
+          const requestBody = {
+            world_setting: {
+              genre: "RPG",
+              lore_summary: "Distopian Incinerator Zone"
+            },
+            user_prompt: concept,
+            max_dialogue_depth: 3
+          };
           const response = await fetch(apiUrl, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              world_setting: {
-                genre: "RPG",
-                lore_summary: "Distopian Incinerator Zone"
-              },
-              user_prompt: concept,
-              max_dialogue_depth: 3
-            })
+            body: JSON.stringify(requestBody)
           });
 
           const payload = await response.json();
@@ -499,6 +569,7 @@
             throw new Error(payload.detail || `HTTP ${response.status}`);
           }
 
+          currentPayload = { input: requestBody, ...payload };
           blueprintOutput.textContent = formatJson(payload.blueprint);
           codeOutput.textContent = stripCodeFence(payload.code);
           qaOutput.textContent = formatJson({
@@ -513,6 +584,7 @@
           connectionPill.textContent = "완료";
           connectionPill.className = "rounded-md border border-acid/30 bg-acid/10 px-2 py-1 text-xs font-medium text-acid";
         } catch (error) {
+          currentPayload = null;
           statusText.textContent = `오류: ${error.message}`;
           connectionPill.textContent = "오류";
           connectionPill.className = "rounded-md border border-rose/30 bg-rose/10 px-2 py-1 text-xs font-medium text-rose";

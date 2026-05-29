@@ -106,26 +106,74 @@ def _validate_code(code: str) -> list[str]:
         "UnityEngine import": r"\busing\s+UnityEngine\s*;",
         "class declaration": r"\b(public\s+)?class\s+\w+",
         "MonoBehaviour inheritance": r":\s*MonoBehaviour\b",
+        "enum state machine": r"\benum\s+\w+",
+        "StartDialogue method": r"\bStartDialogue\s*\(",
+        "ChooseOption method": r"\bChooseOption\s*\(\s*int\s+\w+",
+        "condition checker": r"\b(CheckCondition|EvaluateCondition|MeetsCondition)\s*\(",
     }
     for label, pattern in required_patterns.items():
         if not re.search(pattern, clean_code):
             issues.append(f"Missing {label} in generated C# code.")
 
-    if "TODO" in clean_code or "..." in clean_code:
+    if re.search(r"\b(TODO|placeholder)\b|\.\.\.", clean_code, re.IGNORECASE):
         issues.append("Generated C# code contains placeholder text.")
 
     return issues
 
 
+def _severity_for_issue(issue: str) -> str:
+    lower = issue.lower()
+    if any(token in lower for token in ("parsing failed", "root must", "missing or invalid", "empty")):
+        return "critical"
+    if any(token in lower for token in ("missing", "unbalanced", "points to missing", "unknown state_context")):
+        return "major"
+    return "minor"
+
+
+def _group_issues_by_severity(issues: list[str]) -> dict[str, list[str]]:
+    grouped = {"critical": [], "major": [], "minor": []}
+    for issue in issues:
+        grouped[_severity_for_issue(issue)].append(issue)
+    return grouped
+
+
 def run_qa_agent(blueprint_json_str: str, code: str, attempt: int = 1) -> dict[str, Any]:
     issues = []
+    schema_valid = True
+    dialogue_tree_valid = True
+    unity_code_valid = True
+
     blueprint, parse_error = _parse_json(blueprint_json_str)
     if parse_error:
         issues.append(parse_error)
-    elif blueprint:
-        issues.extend(_validate_blueprint(blueprint))
+        schema_valid = False
+        dialogue_tree_valid = False
+    elif blueprint is not None:
+        blueprint_issues = _validate_blueprint(blueprint)
+        issues.extend(blueprint_issues)
+        schema_valid = not any(
+            issue.startswith("Missing or invalid")
+            or issue.startswith("Blueprint")
+            or "must be a JSON object" in issue
+            for issue in blueprint_issues
+        )
+        dialogue_tree_valid = not any("dialogue_system" in issue or issue.startswith("Node ") for issue in blueprint_issues)
 
-    issues.extend(_validate_code(code))
+    code_issues = _validate_code(code)
+    issues.extend(code_issues)
+    unity_code_valid = not code_issues
+
+    issues_by_severity = _group_issues_by_severity(issues)
+    critical_count = len(issues_by_severity["critical"])
+    major_count = len(issues_by_severity["major"])
+    minor_count = len(issues_by_severity["minor"])
+    overall_score = max(0, 100 - critical_count * 35 - major_count * 15 - minor_count * 5)
+    if critical_count:
+        production_readiness = "FAILED"
+    elif issues:
+        production_readiness = "NEEDS_REVIEW"
+    else:
+        production_readiness = "READY"
 
     return {
         "agent": "qa_agent",
@@ -133,6 +181,12 @@ def run_qa_agent(blueprint_json_str: str, code: str, attempt: int = 1) -> dict[s
         "status": "PASSED" if not issues else "FAILED",
         "issue_count": len(issues),
         "issues": issues,
+        "overall_score": overall_score,
+        "schema_valid": schema_valid,
+        "dialogue_tree_valid": dialogue_tree_valid,
+        "unity_code_valid": unity_code_valid,
+        "production_readiness": production_readiness,
+        "issues_by_severity": issues_by_severity,
     }
 
 
