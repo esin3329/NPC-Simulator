@@ -27,7 +27,7 @@ The NPC Simulator is a production-grade, AI-Native multi-agent pipeline designed
 │       ▼                   ▼                    │ Self  │
 │ ┌───────────┐       ┌───────────┐       ┌──────┴────┐  │
 │ │Design Agent│       │Dev Agent  │       │QA/Valid   │  │
-│ │(1.5 Pro)  │       │(1.5 Pro)  │       │Agent (Pro)│  │
+│ │(2.5 Flash)│       │(2.5 Flash)│       │Agent (Pro)│  │
 │ └─────┬─────┘       └─────┬─────┘       └──────▲────┘  │
 │       │                   │                    │       │
 │       └─► [JSON Schema]  └─► [C# Source] ─────┘ (3-1) │
@@ -43,8 +43,8 @@ The NPC Simulator is a production-grade, AI-Native multi-agent pipeline designed
 The entry point exposes a secure REST API that accepts user parameters asynchronously. It serves as the interface between external client tools (e.g., custom Unity Editor Extensions or web dashboards) and the internal Python orchestration logic.
 
 ### Layer 2: Multi-Agent Orchestration & Structured Outputs
-1. **Design Agent (Gemini 1.5 Pro):** Ingests descriptive prose and interprets state constraints. Outputs are strictly enforced into deterministic JSON through Pydantic v2 metadata schema validation.
-2. **Developer Agent (Gemini 1.5 Pro):** Transforms the validated JSON specification into standard PascalCase Object-Oriented C# scripts containing explicit states, events, and dynamic dialogue routers.
+1. **Design Agent (Gemini 2.5 Flash):** Ingests descriptive prose and interprets state constraints. Outputs are strictly enforced into deterministic JSON through the shared `NPC_BLUEPRINT_RESPONSE_SCHEMA` in `schemas.py`.
+2. **Developer Agent (Gemini 2.5 Flash):** Transforms the validated JSON specification into standard PascalCase Object-Oriented C# scripts containing explicit states, events, and dynamic dialogue routers.
 
 ### Layer 3: The Validation & Self-Healing Loop
 * **QA Agent:** Inspects syntax, counts brackets, and checks for logical mapping slips.

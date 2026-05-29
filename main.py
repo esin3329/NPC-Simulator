@@ -3,8 +3,8 @@ from pathlib import Path
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
-from pydantic import BaseModel
 from orchestrator import Orchestrator
+from schemas import GenerateNpcRequest
 
 app = FastAPI(title="XPRIZE NPC Multi-Agent Server")
 orchestrator = Orchestrator()
@@ -18,16 +18,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-class RequestBody(BaseModel):
-    concept: str
-
 @app.get("/")
 def dashboard():
     return FileResponse(BASE_DIR / "index.html")
 
 @app.post("/api/v1/generate")
-def generate_npc_assets(body: RequestBody):
+def generate_npc_assets(body: GenerateNpcRequest):
     try:
-        return orchestrator.execute_pipeline(body.concept)
+        return orchestrator.execute_pipeline(body)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

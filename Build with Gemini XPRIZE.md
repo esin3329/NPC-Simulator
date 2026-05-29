@@ -16,10 +16,10 @@ JSON
 ```
 {
   "world_setting": {
-  "genre": "RPG / Turn-based Card Game",
-  "lore_summary": "마법과 기계가 공존하는 디스토피아 자원 부족 사회. 밤마다 소각장 주위로 기괴한 에너지 생명체나 몬스터가 몰려듦"
+    "genre": "RPG / Turn-based Card Game",
+    "lore_summary": "마법과 기계가 공존하는 디스토피아 자원 부족 사회. 밤마다 소각장 주위로 기괴한 에너지 생명체나 몬스터가 몰려듦"
   },
-  "user_prompt": "말을 걸 때맏다 퉁명스럽게 굴지만 친해지면 포션을 챙겨주는 유치한 츤데레 뱀파이어 소각장 관리인 NPC"
+  "user_prompt": "말을 걸 때마다 퉁명스럽게 굴지만 친해지면 포션을 챙겨주는 유치한 츤데레 뱀파이어 소각장 관리인 NPC",
   "max_dialogue_depth": 3
 }
 ```
@@ -36,6 +36,7 @@ JSON
     
 4. **Conditional Triggers**: 친밀도(`friendship_stat`) 등의 변수에 따라 특정 대사 분기가 열리는 트리거 조건을 명시합니다.
 5. **🌟 Virtual Runtime Simulation (MOC 고도화)**: 기획자가 설계한 성격대로 대화가 안정적으로 구동되는지 사전 검증하기 위해, **'가상 플레이어 에이전트'와 'NPC 에이전트'가 주고받은 3턴 이상의 가상 대화 샌드박스 시뮬레이션 로그**를 자율 생성합니다.
+6. **Output Contract Enforcement**: 실제 구현의 `schemas.py`에 정의된 `NPC_BLUEPRINT_RESPONSE_SCHEMA`를 Gemini `response_schema`로 전달하여, 문서와 코드가 동일한 JSON 구조를 공유하도록 강제합니다.
     
 
 ## 4. Strict Constraints (제약 조건)
@@ -118,5 +119,22 @@ JSON
       }
     ]
   }
+}
+```
+
+### Shared Runtime Schema Source
+
+실제 서버 코드는 위 출력 스키마를 `schemas.py`의 `NPC_BLUEPRINT_RESPONSE_SCHEMA`로 관리합니다. API 입력 스키마도 같은 파일의 `GenerateNpcRequest`를 사용하며, `/api/v1/generate` 요청 본문은 아래 필드를 받습니다.
+
+JSON
+
+```
+{
+  "world_setting": {
+    "genre": "RPG",
+    "lore_summary": "Distopian Incinerator Zone"
+  },
+  "user_prompt": "NPC concept text",
+  "max_dialogue_depth": 3
 }
 ```
