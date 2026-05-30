@@ -1,7 +1,9 @@
+import json
+
 from google import genai
 from google.genai import types
 
-def run_bulk_generator(blueprint_json_str: str, count: int = 5) -> str:
+def run_bulk_generator(blueprint_json_str: str, count: int = 5) -> list | str:
     client = genai.Client()
     
     system_instruction = "You are an Efficient Game Content Copywriter. Output natural Korean dialogues as a JSON list."
@@ -16,4 +18,9 @@ def run_bulk_generator(blueprint_json_str: str, count: int = 5) -> str:
             temperature=0.7
         )
     )
-    return response.text
+    try:
+        parsed = json.loads(response.text)
+    except json.JSONDecodeError:
+        return response.text
+
+    return parsed if isinstance(parsed, list) else response.text

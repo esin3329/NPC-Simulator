@@ -29,14 +29,8 @@
       };
     </script>
     <style>
-      :root {
-        color-scheme: dark;
-      }
-
-      * {
-        scrollbar-color: rgba(48, 223, 242, 0.35) rgba(8, 10, 18, 0.9);
-      }
-
+      :root { color-scheme: dark; }
+      * { scrollbar-color: rgba(48, 223, 242, 0.35) rgba(8, 10, 18, 0.9); }
       body {
         background:
           linear-gradient(115deg, rgba(48, 223, 242, 0.08), transparent 34rem),
@@ -46,24 +40,27 @@
           #080a12;
         background-size: auto, auto, 48px 48px, 48px 48px, auto;
       }
-
-      pre {
-        white-space: pre-wrap;
-        overflow-wrap: anywhere;
-      }
-
-      .glass {
-        background: linear-gradient(180deg, rgba(17, 23, 37, 0.96), rgba(13, 17, 29, 0.94));
-      }
-
-      .tab-panel[hidden] {
-        display: none;
+      pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+      .glass { background: linear-gradient(180deg, rgba(17, 23, 37, 0.96), rgba(13, 17, 29, 0.94)); }
+      .app-tab-panel[hidden], .asset-panel[hidden] { display: none; }
+      @media (max-width: 767px) {
+        .asset-panel { display: none; }
+        #assetDetails[open] ~ .asset-panel:not([hidden]) { display: block; }
+        .mobile-sticky-actions {
+          position: sticky;
+          bottom: 0;
+          z-index: 20;
+          margin-left: -1.25rem;
+          margin-right: -1.25rem;
+          padding: 0.75rem 1.25rem 1rem;
+          background: linear-gradient(180deg, rgba(8, 10, 18, 0), rgba(8, 10, 18, 0.98) 28%);
+        }
       }
     </style>
   </head>
   <body class="min-h-screen text-slate-100 antialiased">
-    <main class="mx-auto grid min-h-screen max-w-[1500px] gap-4 px-3 py-3 sm:px-4 lg:grid-cols-[390px_minmax(0,1fr)] lg:px-6 lg:py-6">
-      <aside class="glass flex min-h-[520px] flex-col rounded-lg border border-line shadow-deck">
+    <main class="mx-auto grid min-h-screen max-w-[1500px] gap-4 px-3 py-3 sm:px-4 lg:grid-cols-[400px_minmax(0,1fr)] lg:px-6 lg:py-6">
+      <aside class="glass flex flex-col rounded-lg border border-line shadow-deck">
         <header class="border-b border-line px-5 py-5">
           <div class="flex items-center justify-between gap-3">
             <div>
@@ -80,8 +77,8 @@
               <p class="mt-1 text-sm font-semibold text-cyan">2.5 Flash</p>
             </div>
             <div class="rounded-md border border-line bg-void/70 p-3">
-              <p class="text-[11px] uppercase tracking-[0.18em] text-slate-500">Flow</p>
-              <p class="mt-1 text-sm font-semibold text-acid">3 Steps</p>
+              <p class="text-[11px] uppercase tracking-[0.18em] text-slate-500">Mode</p>
+              <p class="mt-1 text-sm font-semibold text-acid">Async</p>
             </div>
             <div class="rounded-md border border-line bg-void/70 p-3">
               <p class="text-[11px] uppercase tracking-[0.18em] text-slate-500">Target</p>
@@ -90,7 +87,13 @@
           </div>
         </header>
 
-        <form id="generatorForm" class="flex flex-1 flex-col gap-4 p-5">
+        <div class="flex rounded-none border-b border-line bg-void/60 p-1 md:hidden">
+          <button type="button" class="app-tab flex-1 rounded px-3 py-2 text-xs font-semibold text-white" data-app-tab="compose">입력</button>
+          <button type="button" class="app-tab flex-1 rounded px-3 py-2 text-xs font-semibold text-slate-400" data-app-tab="result">결과</button>
+          <button type="button" class="app-tab flex-1 rounded px-3 py-2 text-xs font-semibold text-slate-400" data-app-tab="history">히스토리</button>
+        </div>
+
+        <form id="generatorForm" class="app-tab-panel flex flex-1 flex-col gap-4 p-5" data-panel="compose">
           <label class="block">
             <div class="mb-2 flex items-center justify-between gap-3">
               <span class="text-sm font-medium text-slate-200">컨셉 입력</span>
@@ -98,30 +101,50 @@
             </div>
             <textarea
               id="conceptInput"
-              class="min-h-56 w-full resize-y rounded-md border border-line bg-void/90 p-4 text-sm leading-6 text-slate-100 outline-none transition placeholder:text-slate-500 focus:border-cyan focus:ring-2 focus:ring-cyan/20"
+              class="min-h-40 w-full resize-y rounded-md border border-line bg-void/90 p-4 text-sm leading-6 text-slate-100 outline-none transition placeholder:text-slate-500 focus:border-cyan focus:ring-2 focus:ring-cyan/20 md:min-h-56"
               placeholder="예: 기억을 잃은 우주 정거장 정비공. 플레이어가 과거의 사고를 캐낼수록 방어적이지만 따뜻한 성격이 드러난다."
               required
             ></textarea>
           </label>
 
           <div class="grid gap-2">
-            <button type="button" data-sample="border" class="sample-btn rounded-md border border-line bg-panelSoft px-3 py-2 text-left text-xs leading-5 text-slate-300 transition hover:border-cyan hover:text-white">
-              국경 검문소의 냉소적인 퇴역 장교
-            </button>
-            <button type="button" data-sample="archive" class="sample-btn rounded-md border border-line bg-panelSoft px-3 py-2 text-left text-xs leading-5 text-slate-300 transition hover:border-cyan hover:text-white">
-              폐쇄된 기록 보관소를 지키는 기억 수집가
-            </button>
+            <label class="text-sm font-medium text-slate-200" for="templateSelect">프롬프트 템플릿</label>
+            <select id="templateSelect" class="h-11 rounded-md border border-line bg-panelSoft px-3 text-sm text-slate-100 outline-none transition focus:border-cyan">
+              <option value="">직접 작성</option>
+              <option value="merchant">상인 NPC</option>
+              <option value="quest">퀘스트 제공자</option>
+              <option value="hostile">적대 NPC</option>
+              <option value="companion">동료 NPC</option>
+            </select>
+          </div>
+
+          <div class="grid gap-3">
+            <label class="block">
+              <span class="mb-2 block text-sm font-medium text-slate-200">장르</span>
+              <input id="genreInput" value="RPG" class="h-11 w-full rounded-md border border-line bg-void/90 px-3 text-sm text-slate-100 outline-none transition focus:border-cyan" />
+            </label>
+            <label class="block">
+              <span class="mb-2 block text-sm font-medium text-slate-200">세계관 요약</span>
+              <textarea id="loreInput" class="min-h-24 w-full resize-y rounded-md border border-line bg-void/90 p-3 text-sm leading-6 text-slate-100 outline-none transition focus:border-cyan">Distopian Incinerator Zone</textarea>
+            </label>
+            <label class="block">
+              <div class="mb-2 flex items-center justify-between">
+                <span class="text-sm font-medium text-slate-200">대화 깊이</span>
+                <span id="depthValue" class="text-xs text-cyan">3</span>
+              </div>
+              <input id="depthInput" type="range" min="1" max="8" value="3" class="w-full accent-cyan" />
+            </label>
           </div>
 
           <div class="grid grid-cols-[1fr_auto] items-center gap-3 rounded-md border border-line bg-void/75 p-3">
             <div class="min-w-0">
               <p class="text-[11px] uppercase tracking-[0.18em] text-slate-500">Endpoint</p>
-              <code class="mt-1 block truncate text-xs text-cyan">POST /api/v1/generate</code>
+              <code class="mt-1 block truncate text-xs text-cyan">POST /api/v1/generation-jobs</code>
             </div>
             <span id="connectionPill" class="rounded-md border border-amber/30 bg-amber/10 px-2 py-1 text-xs font-medium text-amber">대기</span>
           </div>
 
-          <div class="mt-auto flex gap-2">
+          <div class="mobile-sticky-actions mt-auto flex gap-2">
             <button
               id="generateButton"
               type="submit"
@@ -130,12 +153,7 @@
               <i data-lucide="sparkles" class="h-4 w-4"></i>
               <span id="generateLabel">생성</span>
             </button>
-            <button
-              id="clearButton"
-              type="button"
-              title="초기화"
-              class="grid min-h-11 w-12 place-items-center rounded-md border border-line bg-panelSoft text-slate-300 transition hover:border-amber hover:text-amber"
-            >
+            <button id="clearButton" type="button" title="초기화" class="grid min-h-11 w-12 place-items-center rounded-md border border-line bg-panelSoft text-slate-300 transition hover:border-amber hover:text-amber">
               <i data-lucide="rotate-ccw" class="h-4 w-4"></i>
             </button>
           </div>
@@ -145,20 +163,16 @@
       </aside>
 
       <section class="grid min-h-[720px] gap-4 xl:grid-rows-[auto_minmax(0,1fr)_auto]">
-        <section class="grid gap-4 lg:grid-cols-[minmax(0,1.05fr)_minmax(280px,0.95fr)]">
+        <section class="app-tab-panel grid gap-4 md:grid lg:grid-cols-[minmax(0,1.05fr)_minmax(280px,0.95fr)]" data-panel="result">
           <article class="glass rounded-lg border border-line shadow-deck">
             <div class="flex items-center justify-between gap-3 border-b border-line px-5 py-4">
               <div>
-                <p class="text-xs font-semibold uppercase tracking-[0.2em] text-cyan">NPC Snapshot</p>
+                <p class="text-xs font-semibold uppercase tracking-[0.2em] text-cyan">NPC Summary</p>
                 <h2 id="npcName" class="mt-1 text-xl font-semibold text-white">생성된 NPC 없음</h2>
               </div>
               <span id="validationBadge" class="rounded-md border border-line bg-void/80 px-3 py-1 text-xs text-slate-400">IDLE</span>
             </div>
             <div class="grid gap-3 p-5 sm:grid-cols-2 xl:grid-cols-4">
-              <div class="rounded-md border border-line bg-void/75 p-3">
-                <p class="text-[11px] uppercase tracking-[0.18em] text-slate-500">System</p>
-                <p id="systemName" class="mt-2 truncate text-sm font-semibold text-slate-100">-</p>
-              </div>
               <div class="rounded-md border border-line bg-void/75 p-3">
                 <p class="text-[11px] uppercase tracking-[0.18em] text-slate-500">Faction</p>
                 <p id="factionName" class="mt-2 truncate text-sm font-semibold text-slate-100">-</p>
@@ -171,6 +185,24 @@
                 <p class="text-[11px] uppercase tracking-[0.18em] text-slate-500">Dialogues</p>
                 <p id="dialogueCount" class="mt-2 text-sm font-semibold text-rose">0</p>
               </div>
+              <div class="rounded-md border border-line bg-void/75 p-3">
+                <p class="text-[11px] uppercase tracking-[0.18em] text-slate-500">Latency</p>
+                <p id="latencyText" class="mt-2 text-sm font-semibold text-cyan">0.0s</p>
+              </div>
+            </div>
+            <div class="grid gap-3 border-t border-line p-5 sm:grid-cols-3">
+              <div>
+                <p class="text-[11px] uppercase tracking-[0.18em] text-slate-500">QA Status</p>
+                <p id="qaStatusText" class="mt-2 text-sm font-semibold text-slate-100">-</p>
+              </div>
+              <div>
+                <p class="text-[11px] uppercase tracking-[0.18em] text-slate-500">Issues</p>
+                <p id="issueCountText" class="mt-2 text-sm font-semibold text-slate-100">0 critical / 0 total</p>
+              </div>
+              <div>
+                <p class="text-[11px] uppercase tracking-[0.18em] text-slate-500">Unity File</p>
+                <p id="unityFileText" class="mt-2 truncate text-sm font-semibold text-slate-100">-</p>
+              </div>
             </div>
             <div id="tagList" class="flex min-h-12 flex-wrap gap-2 border-t border-line px-5 py-4">
               <span class="rounded-md border border-line bg-panelSoft px-2 py-1 text-xs text-slate-400">태그 대기 중</span>
@@ -181,77 +213,79 @@
             <div class="border-b border-line px-5 py-4">
               <p class="text-xs font-semibold uppercase tracking-[0.2em] text-amber">Pipeline</p>
               <h2 class="mt-1 text-lg font-semibold text-white">실행 단계</h2>
+              <p id="jobText" class="mt-1 text-xs text-slate-500">대기 중</p>
             </div>
             <ol id="stepList" class="grid gap-3 p-5">
-              <li class="step-item rounded-md border border-line bg-void/75 p-3" data-step="design">
-                <div class="flex items-center gap-3">
-                  <i data-lucide="pen-tool" class="h-4 w-4 text-cyan"></i>
-                  <span class="text-sm font-medium text-slate-200">Design Agent</span>
-                  <span class="ml-auto text-xs text-slate-500">대기</span>
-                </div>
-              </li>
-              <li class="step-item rounded-md border border-line bg-void/75 p-3" data-step="code">
-                <div class="flex items-center gap-3">
-                  <i data-lucide="braces" class="h-4 w-4 text-rose"></i>
-                  <span class="text-sm font-medium text-slate-200">Developer Agent</span>
-                  <span class="ml-auto text-xs text-slate-500">대기</span>
-                </div>
-              </li>
-              <li class="step-item rounded-md border border-line bg-void/75 p-3" data-step="bulk">
-                <div class="flex items-center gap-3">
-                  <i data-lucide="messages-square" class="h-4 w-4 text-acid"></i>
-                  <span class="text-sm font-medium text-slate-200">Bonus Assets</span>
-                  <span class="ml-auto text-xs text-slate-500">대기</span>
-                </div>
-              </li>
+              <li class="step-item rounded-md border border-line bg-void/75 p-3" data-step="design"><div class="flex items-center gap-3"><i data-lucide="pen-tool" class="h-4 w-4 text-cyan"></i><span class="text-sm font-medium text-slate-200">Design Agent</span><span class="ml-auto text-xs text-slate-500">대기</span></div></li>
+              <li class="step-item rounded-md border border-line bg-void/75 p-3" data-step="code"><div class="flex items-center gap-3"><i data-lucide="braces" class="h-4 w-4 text-rose"></i><span class="text-sm font-medium text-slate-200">Developer Agent</span><span class="ml-auto text-xs text-slate-500">대기</span></div></li>
+              <li class="step-item rounded-md border border-line bg-void/75 p-3" data-step="qa"><div class="flex items-center gap-3"><i data-lucide="shield-check" class="h-4 w-4 text-amber"></i><span class="text-sm font-medium text-slate-200">QA Agent</span><span class="ml-auto text-xs text-slate-500">대기</span></div></li>
+              <li class="step-item rounded-md border border-line bg-void/75 p-3" data-step="self-healing"><div class="flex items-center gap-3"><i data-lucide="wrench" class="h-4 w-4 text-cyan"></i><span class="text-sm font-medium text-slate-200">Self-Healing</span><span class="ml-auto text-xs text-slate-500">대기</span></div></li>
+              <li class="step-item rounded-md border border-line bg-void/75 p-3" data-step="bonus-assets"><div class="flex items-center gap-3"><i data-lucide="messages-square" class="h-4 w-4 text-acid"></i><span class="text-sm font-medium text-slate-200">Bonus Assets</span><span class="ml-auto text-xs text-slate-500">대기</span></div></li>
             </ol>
           </article>
         </section>
 
-        <article class="glass flex min-h-0 flex-col rounded-lg border border-line shadow-deck">
+        <article class="app-tab-panel glass flex min-h-0 flex-col rounded-lg border border-line shadow-deck md:flex" data-panel="result">
           <div class="flex flex-wrap items-center justify-between gap-3 border-b border-line px-5 py-4">
             <div>
               <p class="text-xs font-semibold uppercase tracking-[0.2em] text-cyan">Generated Assets</p>
               <h2 class="mt-1 text-lg font-semibold text-white">출력</h2>
             </div>
-            <div class="flex items-center gap-2">
+            <div class="flex flex-wrap items-center gap-2">
               <div class="flex rounded-md border border-line bg-void/75 p-1">
-                <button type="button" class="tab-btn rounded px-3 py-1.5 text-xs font-medium text-white" data-tab="blueprint">JSON</button>
-                <button type="button" class="tab-btn rounded px-3 py-1.5 text-xs font-medium text-slate-400" data-tab="code">C#</button>
-                <button type="button" class="tab-btn rounded px-3 py-1.5 text-xs font-medium text-slate-400" data-tab="qa">QA</button>
-                <button type="button" class="tab-btn rounded px-3 py-1.5 text-xs font-medium text-slate-400" data-tab="bonus">대사</button>
+                <button type="button" class="asset-tab rounded px-3 py-1.5 text-xs font-medium text-white" data-asset="blueprint">JSON</button>
+                <button type="button" class="asset-tab rounded px-3 py-1.5 text-xs font-medium text-slate-400" data-asset="code">C#</button>
+                <button type="button" class="asset-tab rounded px-3 py-1.5 text-xs font-medium text-slate-400" data-asset="qa">QA</button>
+                <button type="button" class="asset-tab rounded px-3 py-1.5 text-xs font-medium text-slate-400" data-asset="bonus">대사</button>
               </div>
-              <button id="copyActiveButton" type="button" title="복사" class="grid h-9 w-9 place-items-center rounded-md border border-line bg-panelSoft text-slate-300 transition hover:border-cyan hover:text-cyan">
-                <i data-lucide="copy" class="h-4 w-4"></i>
-              </button>
+              <button id="copyActiveButton" type="button" title="복사" class="grid h-9 w-9 place-items-center rounded-md border border-line bg-panelSoft text-slate-300 transition hover:border-cyan hover:text-cyan"><i data-lucide="copy" class="h-4 w-4"></i></button>
               <select id="downloadTarget" title="다운로드 대상" class="h-9 rounded-md border border-line bg-panelSoft px-2 text-xs text-slate-200 outline-none transition hover:border-cyan focus:border-cyan">
                 <option value="blueprint">JSON blueprint</option>
                 <option value="code">Unity C# code</option>
                 <option value="qa">QA report</option>
+                <option value="bonus">Bonus dialogues</option>
                 <option value="bundle">Full bundle</option>
               </select>
-              <button id="downloadButton" type="button" title="다운로드" class="grid h-9 w-9 place-items-center rounded-md border border-line bg-panelSoft text-slate-300 transition hover:border-acid hover:text-acid">
-                <i data-lucide="download" class="h-4 w-4"></i>
-              </button>
+              <button id="downloadButton" type="button" title="다운로드" class="grid h-9 w-9 place-items-center rounded-md border border-line bg-panelSoft text-slate-300 transition hover:border-acid hover:text-acid"><i data-lucide="download" class="h-4 w-4"></i></button>
             </div>
           </div>
           <div class="min-h-0 flex-1 overflow-hidden p-5">
-            <div id="blueprintPanel" class="tab-panel h-full overflow-auto rounded-md border border-line bg-void/90 p-4">
-              <pre class="min-h-full text-sm leading-6 text-slate-200"><code id="blueprintOutput">생성 결과가 여기에 JSON 코드 블록으로 표시됩니다.</code></pre>
-            </div>
-            <div id="codePanel" class="tab-panel h-full overflow-auto rounded-md border border-line bg-void/90 p-4" hidden>
-              <pre class="min-h-full text-sm leading-6 text-slate-200"><code id="codeOutput">생성 결과가 여기에 C# 코드 블록으로 표시됩니다.</code></pre>
-            </div>
-            <div id="qaPanel" class="tab-panel h-full overflow-auto rounded-md border border-line bg-void/90 p-4" hidden>
-              <pre class="min-h-full text-sm leading-6 text-slate-200"><code id="qaOutput">QA 결과가 여기에 표시됩니다.</code></pre>
-            </div>
-            <div id="bonusPanel" class="tab-panel h-full overflow-auto rounded-md border border-line bg-void/90 p-4" hidden>
-              <pre class="min-h-full text-sm leading-6 text-slate-200"><code id="bonusOutput">보너스 대사가 여기에 표시됩니다.</code></pre>
-            </div>
+            <details id="assetDetails" class="md:hidden">
+              <summary class="cursor-pointer rounded-md border border-line bg-panelSoft px-3 py-2 text-sm font-medium text-slate-200">선택한 출력 전체 보기</summary>
+              <div class="mt-3"></div>
+            </details>
+            <div id="blueprintPanel" class="asset-panel h-[420px] overflow-auto rounded-md border border-line bg-void/90 p-4 md:h-full"><pre class="min-h-full text-sm leading-6 text-slate-200"><code id="blueprintOutput">생성 결과가 여기에 JSON 코드 블록으로 표시됩니다.</code></pre></div>
+            <div id="codePanel" class="asset-panel h-[420px] overflow-auto rounded-md border border-line bg-void/90 p-4 md:h-full" hidden><pre class="min-h-full text-sm leading-6 text-slate-200"><code id="codeOutput">생성 결과가 여기에 C# 코드 블록으로 표시됩니다.</code></pre></div>
+            <div id="qaPanel" class="asset-panel h-[420px] overflow-auto rounded-md border border-line bg-void/90 p-4 md:h-full" hidden><pre class="min-h-full text-sm leading-6 text-slate-200"><code id="qaOutput">QA 결과가 여기에 표시됩니다.</code></pre></div>
+            <div id="bonusPanel" class="asset-panel h-[420px] overflow-auto rounded-md border border-line bg-void/90 p-4 md:h-full" hidden><pre class="min-h-full text-sm leading-6 text-slate-200"><code id="bonusOutput">보너스 대사가 여기에 표시됩니다.</code></pre></div>
           </div>
         </article>
 
-        <article class="glass rounded-lg border border-line shadow-deck">
+        <section class="app-tab-panel grid gap-4 md:grid md:grid-cols-[minmax(0,1fr)_360px]" data-panel="history">
+          <article class="glass rounded-lg border border-line shadow-deck">
+            <div class="flex items-center justify-between gap-3 border-b border-line px-5 py-4">
+              <div>
+                <p class="text-xs font-semibold uppercase tracking-[0.2em] text-acid">History</p>
+                <h2 class="mt-1 text-lg font-semibold text-white">저장된 생성물</h2>
+              </div>
+              <button id="refreshHistoryButton" type="button" title="새로고침" class="grid h-9 w-9 place-items-center rounded-md border border-line bg-panelSoft text-slate-300 transition hover:border-cyan hover:text-cyan"><i data-lucide="refresh-cw" class="h-4 w-4"></i></button>
+            </div>
+            <div id="historyList" class="grid max-h-[420px] gap-3 overflow-auto p-5 md:max-h-[520px]">
+              <p class="text-sm text-slate-400">히스토리를 불러오는 중입니다.</p>
+            </div>
+          </article>
+          <article class="glass rounded-lg border border-line shadow-deck">
+            <div class="border-b border-line px-5 py-4">
+              <p class="text-xs font-semibold uppercase tracking-[0.2em] text-rose">Compare</p>
+              <h2 class="mt-1 text-lg font-semibold text-white">최근 결과 비교</h2>
+            </div>
+            <div id="comparePanel" class="grid gap-3 p-5 text-sm text-slate-300">
+              <p>생성 이력이 생기면 QA, 대화 수, latency, model call 기준으로 최근 결과를 비교합니다.</p>
+            </div>
+          </article>
+        </section>
+
+        <article class="app-tab-panel glass rounded-lg border border-line shadow-deck md:block" data-panel="result">
           <div class="flex items-center justify-between gap-3 border-b border-line px-5 py-3">
             <p class="text-xs font-semibold uppercase tracking-[0.2em] text-acid">Logs</p>
             <span id="elapsedTime" class="text-xs text-slate-500">0.0s</span>
@@ -264,73 +298,60 @@
     </main>
 
     <script>
-      const form = document.getElementById("generatorForm");
-      const conceptInput = document.getElementById("conceptInput");
-      const charCount = document.getElementById("charCount");
-      const generateButton = document.getElementById("generateButton");
-      const generateLabel = document.getElementById("generateLabel");
-      const clearButton = document.getElementById("clearButton");
-      const statusText = document.getElementById("statusText");
-      const connectionPill = document.getElementById("connectionPill");
-      const blueprintOutput = document.getElementById("blueprintOutput");
-      const codeOutput = document.getElementById("codeOutput");
-      const qaOutput = document.getElementById("qaOutput");
-      const bonusOutput = document.getElementById("bonusOutput");
-      const logOutput = document.getElementById("logOutput");
-      const elapsedTime = document.getElementById("elapsedTime");
-      const copyActiveButton = document.getElementById("copyActiveButton");
-      const downloadTarget = document.getElementById("downloadTarget");
-      const downloadButton = document.getElementById("downloadButton");
-      const npcName = document.getElementById("npcName");
-      const validationBadge = document.getElementById("validationBadge");
-      const systemName = document.getElementById("systemName");
-      const factionName = document.getElementById("factionName");
-      const stateCount = document.getElementById("stateCount");
-      const dialogueCount = document.getElementById("dialogueCount");
-      const tagList = document.getElementById("tagList");
+      const $ = (id) => document.getElementById(id);
+      const form = $("generatorForm");
+      const conceptInput = $("conceptInput");
+      const charCount = $("charCount");
+      const genreInput = $("genreInput");
+      const loreInput = $("loreInput");
+      const depthInput = $("depthInput");
+      const depthValue = $("depthValue");
+      const templateSelect = $("templateSelect");
+      const generateButton = $("generateButton");
+      const generateLabel = $("generateLabel");
+      const clearButton = $("clearButton");
+      const statusText = $("statusText");
+      const connectionPill = $("connectionPill");
+      const blueprintOutput = $("blueprintOutput");
+      const codeOutput = $("codeOutput");
+      const qaOutput = $("qaOutput");
+      const bonusOutput = $("bonusOutput");
+      const logOutput = $("logOutput");
+      const elapsedTime = $("elapsedTime");
+      const copyActiveButton = $("copyActiveButton");
+      const downloadTarget = $("downloadTarget");
+      const downloadButton = $("downloadButton");
+      const npcName = $("npcName");
+      const validationBadge = $("validationBadge");
+      const factionName = $("factionName");
+      const stateCount = $("stateCount");
+      const dialogueCount = $("dialogueCount");
+      const latencyText = $("latencyText");
+      const qaStatusText = $("qaStatusText");
+      const issueCountText = $("issueCountText");
+      const unityFileText = $("unityFileText");
+      const tagList = $("tagList");
+      const jobText = $("jobText");
+      const historyList = $("historyList");
+      const comparePanel = $("comparePanel");
 
       const apiBaseUrl = window.location.protocol === "file:" ? "http://127.0.0.1:8000" : window.location.origin;
-      const apiUrl = `${apiBaseUrl}/api/v1/generate`;
-      const samples = {
-        border: "국경 검문소의 냉소적인 퇴역 장교. 플레이어가 밀수품 대신 난민 아이의 약을 숨겼다는 사실을 알게 되면 규칙과 양심 사이에서 흔들린다.",
-        archive: "폐쇄된 기록 보관소를 지키는 기억 수집가. 잊힌 시민들의 목소리를 보관하지만, 자신의 가장 중요한 기억만은 누군가에게 도난당했다."
+      const urls = {
+        health: `${apiBaseUrl}/api/v1/health`,
+        jobs: `${apiBaseUrl}/api/v1/generation-jobs`,
+        generations: `${apiBaseUrl}/api/v1/generations`
       };
-      let activeTab = "blueprint";
+      const templates = {
+        merchant: "플레이어에게 희귀 재료를 팔지만, 가격을 깎으려 하면 옛 전쟁 이야기를 꺼내는 떠돌이 상인 NPC",
+        quest: "마을의 실종 사건을 조사해 달라고 부탁하지만, 사실은 단서를 숨기고 있는 죄책감 많은 퀘스트 제공자 NPC",
+        hostile: "침입자를 비웃으며 함정을 작동시키지만, 명예로운 결투에는 약한 고대 유적의 적대 수문장 NPC",
+        companion: "농담으로 긴장을 풀어 주지만 위험한 선택 앞에서는 냉정해지는 전직 정찰병 동료 NPC"
+      };
+      let activeAsset = "blueprint";
       let currentPayload = null;
       let timerId = null;
+      let pollId = null;
       let startedAt = 0;
-
-      function updateCharCount() {
-        charCount.textContent = `${conceptInput.value.length}자`;
-      }
-
-      function parseMaybeJson(value) {
-        if (typeof value !== "string") return value;
-        try {
-          return JSON.parse(value);
-        } catch {
-          return null;
-        }
-      }
-
-      function formatJson(value) {
-        if (typeof value !== "string") {
-          return JSON.stringify(value, null, 2);
-        }
-
-        try {
-          return JSON.stringify(JSON.parse(value), null, 2);
-        } catch {
-          return value;
-        }
-      }
-
-      function stripCodeFence(value) {
-        return String(value || "")
-          .replace(/^```(?:csharp|cs|c#)?\s*/i, "")
-          .replace(/\s*```$/i, "")
-          .trim();
-      }
 
       function escapeHtml(value) {
         return String(value)
@@ -341,74 +362,330 @@
           .replaceAll("'", "&#039;");
       }
 
-      function renderLogs(logs) {
-        const items = Array.isArray(logs) && logs.length ? logs : ["완료 로그가 없습니다."];
-        logOutput.innerHTML = items
-          .map((item) => `<span class="rounded-md border border-line bg-void/80 px-3 py-2">${escapeHtml(item)}</span>`)
-          .join("");
+      function parseMaybeJson(value) {
+        if (typeof value !== "string") return value;
+        try { return JSON.parse(value); } catch { return null; }
       }
 
-      function updateSteps(logs = []) {
-        const text = logs.join(" ").toLowerCase();
-        const doneMap = {
-          design: text.includes("design"),
-          code: text.includes("code") || text.includes("c#"),
-          bulk: text.includes("bonus") || text.includes("ambient") || text.includes("dialogues")
-        };
+      function formatJson(value) {
+        if (typeof value !== "string") return JSON.stringify(value, null, 2);
+        try { return JSON.stringify(JSON.parse(value), null, 2); } catch { return value; }
+      }
 
-        document.querySelectorAll(".step-item").forEach((item) => {
-          const done = doneMap[item.dataset.step];
-          const state = item.querySelector("span:last-child");
-          item.classList.toggle("border-cyan/50", done);
-          item.classList.toggle("bg-cyan/5", done);
-          state.textContent = done ? "완료" : "대기";
-          state.className = done ? "ml-auto text-xs text-cyan" : "ml-auto text-xs text-slate-500";
+      function stripCodeFence(value) {
+        return String(value || "").replace(/^```(?:csharp|cs|c#)?\s*/i, "").replace(/\s*```$/i, "").trim();
+      }
+
+      function seconds(ms) {
+        return `${((Number(ms) || 0) / 1000).toFixed(1)}s`;
+      }
+
+      function updateCharCount() {
+        charCount.textContent = `${conceptInput.value.length}자`;
+      }
+
+      function switchAppTab(tab) {
+        document.querySelectorAll(".app-tab").forEach((button) => {
+          const selected = button.dataset.appTab === tab;
+          button.classList.toggle("bg-cyan/15", selected);
+          button.classList.toggle("text-white", selected);
+          button.classList.toggle("text-slate-400", !selected);
+        });
+        if (window.matchMedia("(min-width: 768px)").matches) {
+          document.querySelectorAll(".app-tab-panel").forEach((panel) => {
+            panel.hidden = false;
+          });
+          return;
+        }
+        document.querySelectorAll(".app-tab-panel").forEach((panel) => {
+          panel.hidden = panel.dataset.panel !== tab;
         });
       }
 
-      function renderSnapshot(blueprint, bonusAssets) {
-        const parsed = parseMaybeJson(blueprint);
-        const profile = parsed?.npc_profile || {};
-        const sandbox = parsed?.runtime_simulation_sandbox || {};
-        const nodes = parsed?.dialogue_system?.nodes || {};
-        const states = Array.isArray(profile.base_states) ? profile.base_states : [];
+      function setActiveAsset(asset) {
+        activeAsset = asset;
+        document.querySelectorAll(".asset-tab").forEach((button) => {
+          const selected = button.dataset.asset === asset;
+          button.classList.toggle("bg-cyan/15", selected);
+          button.classList.toggle("text-white", selected);
+          button.classList.toggle("text-slate-400", !selected);
+        });
+        document.querySelectorAll(".asset-panel").forEach((panel) => {
+          panel.hidden = panel.id !== `${asset}Panel`;
+        });
+      }
+
+      function renderLogs(logs) {
+        const items = Array.isArray(logs) && logs.length ? logs : ["완료 로그가 없습니다."];
+        logOutput.innerHTML = items.map((item) => `<span class="rounded-md border border-line bg-void/80 px-3 py-2">${escapeHtml(item)}</span>`).join("");
+      }
+
+      function updateSteps(stage, logs = []) {
+        const order = ["design", "code", "qa", "self-healing", "bonus-assets"];
+        const stageIndex = order.indexOf(stage);
+        const text = logs.join(" ").toLowerCase();
+        document.querySelectorAll(".step-item").forEach((item) => {
+          const index = order.indexOf(item.dataset.step);
+          const done = stage === "saved" || index < stageIndex || text.includes(item.dataset.step.replace("-", " "));
+          const active = item.dataset.step === stage;
+          const state = item.querySelector("span:last-child");
+          item.classList.toggle("border-cyan/50", done || active);
+          item.classList.toggle("bg-cyan/5", done || active);
+          state.textContent = active ? "진행" : done ? "완료" : "대기";
+          state.className = active || done ? "ml-auto text-xs text-cyan" : "ml-auto text-xs text-slate-500";
+        });
+      }
+
+      function renderSnapshot(payload) {
+        const summary = payload.summary || {};
+        const parsed = parseMaybeJson(payload.blueprint) || {};
+        const profile = parsed.npc_profile || {};
         const tags = Array.isArray(profile.personality_tags) ? profile.personality_tags : [];
-        const bonusCount = Array.isArray(bonusAssets) ? bonusAssets.length : 0;
+        const metrics = payload.metrics || {};
+        const qa = payload.qa_report || {};
 
-        npcName.textContent = profile.display_name || "이름 미확정";
-        systemName.textContent = profile.system_name || "-";
-        factionName.textContent = profile.faction || "-";
-        stateCount.textContent = states.length;
-        dialogueCount.textContent = Object.keys(nodes).length + bonusCount;
-        validationBadge.textContent = sandbox.validation_status || "READY";
-        validationBadge.className = "rounded-md border border-acid/40 bg-acid/10 px-3 py-1 text-xs text-acid";
-
+        npcName.textContent = summary.display_name || profile.display_name || "이름 미확정";
+        factionName.textContent = summary.faction || profile.faction || "-";
+        stateCount.textContent = summary.state_count ?? 0;
+        dialogueCount.textContent = summary.dialogue_count ?? 0;
+        latencyText.textContent = seconds(summary.latency_ms || metrics.latency_ms);
+        qaStatusText.textContent = `${summary.qa_status || qa.status || "-"} / ${summary.production_readiness || qa.production_readiness || "UNKNOWN"}`;
+        issueCountText.textContent = `${summary.critical_issue_count || 0} critical / ${summary.issue_count || qa.issue_count || 0} total`;
+        unityFileText.textContent = payload.unity_metadata?.recommended_filename || "-";
+        validationBadge.textContent = payload.status || "READY";
+        validationBadge.className = payload.status === "SUCCESS"
+          ? "rounded-md border border-acid/40 bg-acid/10 px-3 py-1 text-xs text-acid"
+          : "rounded-md border border-amber/40 bg-amber/10 px-3 py-1 text-xs text-amber";
         tagList.innerHTML = tags.length
           ? tags.map((tag) => `<span class="rounded-md border border-line bg-panelSoft px-2 py-1 text-xs text-slate-200">${escapeHtml(tag)}</span>`).join("")
           : '<span class="rounded-md border border-line bg-panelSoft px-2 py-1 text-xs text-slate-400">태그 없음</span>';
       }
 
-      function renderBonusAssets(value) {
-        if (!value) return "보너스 대사가 없습니다.";
-        if (typeof value === "string") return value;
-        return JSON.stringify(value, null, 2);
+      function renderPayload(payload) {
+        currentPayload = payload;
+        blueprintOutput.textContent = formatJson(payload.blueprint);
+        codeOutput.textContent = stripCodeFence(payload.code);
+        qaOutput.textContent = formatJson({ final_report: payload.qa_report, healing_history: payload.self_healing });
+        bonusOutput.textContent = typeof payload.bonus_assets === "string" ? payload.bonus_assets : JSON.stringify(payload.bonus_assets || [], null, 2);
+        renderLogs(payload.logs);
+        updateSteps("saved", payload.logs || []);
+        renderSnapshot(payload);
       }
 
-      function setActiveTab(tab) {
-        activeTab = tab;
-        document.querySelectorAll(".tab-btn").forEach((button) => {
-          const selected = button.dataset.tab === tab;
-          button.classList.toggle("bg-cyan/15", selected);
-          button.classList.toggle("text-white", selected);
-          button.classList.toggle("text-slate-400", !selected);
+      function setConnection(label, tone) {
+        const tones = {
+          ok: "rounded-md border border-acid/30 bg-acid/10 px-2 py-1 text-xs font-medium text-acid",
+          warn: "rounded-md border border-amber/30 bg-amber/10 px-2 py-1 text-xs font-medium text-amber",
+          run: "rounded-md border border-cyan/30 bg-cyan/10 px-2 py-1 text-xs font-medium text-cyan",
+          error: "rounded-md border border-rose/30 bg-rose/10 px-2 py-1 text-xs font-medium text-rose"
+        };
+        connectionPill.textContent = label;
+        connectionPill.className = tones[tone] || tones.warn;
+      }
+
+      function startTimer() {
+        startedAt = performance.now();
+        clearInterval(timerId);
+        timerId = setInterval(() => {
+          elapsedTime.textContent = `${((performance.now() - startedAt) / 1000).toFixed(1)}s`;
+        }, 250);
+      }
+
+      function stopTimer() {
+        clearInterval(timerId);
+        timerId = null;
+        if (startedAt) elapsedTime.textContent = `${((performance.now() - startedAt) / 1000).toFixed(1)}s`;
+      }
+
+      function buildRequestBody() {
+        return {
+          world_setting: {
+            genre: genreInput.value.trim() || "RPG",
+            lore_summary: loreInput.value.trim() || "Distopian Incinerator Zone"
+          },
+          user_prompt: conceptInput.value.trim(),
+          max_dialogue_depth: Number(depthInput.value)
+        };
+      }
+
+      async function checkBackendHealth() {
+        statusText.textContent = "백엔드 상태 확인 중";
+        setConnection("확인", "run");
+        try {
+          const response = await fetch(urls.health);
+          const payload = await response.json();
+          if (!response.ok) throw new Error(payload.detail || `HTTP ${response.status}`);
+          if (payload.status === "ok") {
+            statusText.textContent = "백엔드와 Gemini 설정 준비 완료";
+            setConnection("준비", "ok");
+          } else {
+            const missingKey = payload.checks?.gemini_api_key === false;
+            statusText.textContent = missingKey ? "Gemini API 키 설정 필요" : "백엔드 설정 확인 필요";
+            setConnection("설정", "warn");
+            renderLogs(missingKey ? ["GEMINI_API_KEY 또는 GOOGLE_API_KEY를 설정하세요."] : ["Health check가 degraded 상태입니다."]);
+          }
+        } catch (error) {
+          statusText.textContent = `백엔드 연결 오류: ${error.message}`;
+          setConnection("오류", "error");
+          renderLogs(["백엔드 서버가 실행 중인지 확인하세요."]);
+        }
+      }
+
+      async function loadHistory() {
+        try {
+          const response = await fetch(urls.generations);
+          const payload = await response.json();
+          if (!response.ok) throw new Error(payload.detail || `HTTP ${response.status}`);
+          renderHistory(payload.generations || []);
+          renderCompare(payload.generations || []);
+        } catch (error) {
+          historyList.innerHTML = `<p class="text-sm text-rose">히스토리 로드 오류: ${escapeHtml(error.message)}</p>`;
+        }
+      }
+
+      function renderHistory(items) {
+        if (!items.length) {
+          historyList.innerHTML = '<p class="text-sm text-slate-400">아직 저장된 생성물이 없습니다.</p>';
+          return;
+        }
+        historyList.innerHTML = items.map((item) => {
+          const summary = item.summary || {};
+          const prompt = item.input?.user_prompt || "입력 없음";
+          return `
+            <button type="button" data-generation-id="${escapeHtml(item.generation_id)}" class="history-item rounded-md border border-line bg-void/75 p-4 text-left transition hover:border-cyan">
+              <div class="flex items-start justify-between gap-3">
+                <div class="min-w-0">
+                  <p class="truncate text-sm font-semibold text-white">${escapeHtml(summary.display_name || item.generation_id)}</p>
+                  <p class="mt-1 line-clamp-2 text-xs leading-5 text-slate-400">${escapeHtml(prompt)}</p>
+                </div>
+                <span class="rounded-md border border-line bg-panelSoft px-2 py-1 text-xs text-slate-300">${escapeHtml(item.status || "-")}</span>
+              </div>
+              <div class="mt-3 grid grid-cols-4 gap-2 text-center text-xs">
+                <span class="rounded bg-panelSoft px-2 py-1">${summary.dialogue_count || 0} dlg</span>
+                <span class="rounded bg-panelSoft px-2 py-1">${summary.issue_count || 0} issue</span>
+                <span class="rounded bg-panelSoft px-2 py-1">${seconds(summary.latency_ms)}</span>
+                <span class="rounded bg-panelSoft px-2 py-1">${summary.model_calls || item.metrics?.model_calls || 0} calls</span>
+              </div>
+            </button>
+          `;
+        }).join("");
+        document.querySelectorAll(".history-item").forEach((button) => {
+          button.addEventListener("click", () => openGeneration(button.dataset.generationId));
         });
-        document.querySelectorAll(".tab-panel").forEach((panel) => {
-          panel.hidden = panel.id !== `${tab}Panel`;
-        });
+      }
+
+      function renderCompare(items) {
+        const recent = items.slice(0, 3);
+        if (recent.length < 2) {
+          comparePanel.innerHTML = "<p>비교하려면 생성 결과가 2개 이상 필요합니다.</p>";
+          return;
+        }
+        comparePanel.innerHTML = recent.map((item) => {
+          const summary = item.summary || {};
+          return `
+            <div class="rounded-md border border-line bg-void/75 p-3">
+              <p class="truncate font-semibold text-white">${escapeHtml(summary.display_name || item.generation_id)}</p>
+              <div class="mt-2 grid grid-cols-2 gap-2 text-xs">
+                <span>QA: ${escapeHtml(summary.qa_status || item.status || "-")}</span>
+                <span>대사: ${summary.dialogue_count || 0}</span>
+                <span>시간: ${seconds(summary.latency_ms)}</span>
+                <span>호출: ${summary.model_calls || item.metrics?.model_calls || 0}</span>
+              </div>
+            </div>
+          `;
+        }).join("");
+      }
+
+      async function openGeneration(generationId) {
+        statusText.textContent = "저장된 생성물을 여는 중";
+        try {
+          const response = await fetch(`${urls.generations}/${encodeURIComponent(generationId)}`);
+          const payload = await response.json();
+          if (!response.ok) throw new Error(payload.detail || `HTTP ${response.status}`);
+          renderPayload(payload);
+          statusText.textContent = "저장된 생성물을 열었습니다";
+          switchAppTab("result");
+        } catch (error) {
+          statusText.textContent = `히스토리 열기 오류: ${error.message}`;
+        }
+      }
+
+      async function pollJob(jobId) {
+        clearInterval(pollId);
+        pollId = setInterval(async () => {
+          try {
+            const response = await fetch(`${urls.jobs}/${encodeURIComponent(jobId)}`);
+            const job = await response.json();
+            if (!response.ok) throw new Error(job.detail || `HTTP ${response.status}`);
+            jobText.textContent = `${job.status} / ${job.stage}${job.message ? ` - ${job.message}` : ""}`;
+            updateSteps(job.stage, []);
+            if (job.status === "COMPLETED") {
+              clearInterval(pollId);
+              stopTimer();
+              renderPayload(job.result);
+              statusText.textContent = "생성 및 QA 완료";
+              setConnection("완료", "ok");
+              generateButton.disabled = false;
+              generateLabel.textContent = "생성";
+              await loadHistory();
+              switchAppTab("result");
+            } else if (job.status === "FAILED") {
+              throw new Error(job.error || "Generation failed");
+            }
+          } catch (error) {
+            clearInterval(pollId);
+            stopTimer();
+            statusText.textContent = `오류: ${error.message}`;
+            setConnection("오류", "error");
+            generateButton.disabled = false;
+            generateLabel.textContent = "생성";
+            renderLogs(["백엔드 서버와 API 키 설정을 확인하세요."]);
+          }
+        }, 1500);
+      }
+
+      async function submitGeneration(event) {
+        event.preventDefault();
+        const requestBody = buildRequestBody();
+        if (!requestBody.user_prompt) return;
+        clearInterval(pollId);
+        generateButton.disabled = true;
+        generateLabel.textContent = "생성 중";
+        statusText.textContent = "Gemini 에이전트 job을 시작하는 중...";
+        setConnection("실행", "run");
+        jobText.textContent = "QUEUED / queued";
+        blueprintOutput.textContent = "응답 대기 중...";
+        codeOutput.textContent = "응답 대기 중...";
+        qaOutput.textContent = "QA 대기 중...";
+        bonusOutput.textContent = "응답 대기 중...";
+        renderLogs(["작업 시작"]);
+        updateSteps("design", []);
+        setActiveAsset("blueprint");
+        switchAppTab("result");
+        startTimer();
+
+        try {
+          const response = await fetch(urls.jobs, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(requestBody)
+          });
+          const job = await response.json();
+          if (!response.ok) throw new Error(job.detail || `HTTP ${response.status}`);
+          jobText.textContent = `${job.status} / ${job.stage}`;
+          pollJob(job.job_id);
+        } catch (error) {
+          stopTimer();
+          generateButton.disabled = false;
+          generateLabel.textContent = "생성";
+          statusText.textContent = `오류: ${error.message}`;
+          setConnection("오류", "error");
+          blueprintOutput.textContent = "요청 처리 중 오류가 발생했습니다.";
+        }
       }
 
       async function copyActiveOutput() {
-        const target = document.getElementById(`${activeTab}Output`);
+        const target = $(`${activeAsset}Output`);
         await navigator.clipboard.writeText(target.textContent);
         copyActiveButton.innerHTML = '<i data-lucide="check" class="h-4 w-4"></i>';
         lucide.createIcons();
@@ -436,172 +713,80 @@
 
       function downloadSelectedOutput() {
         const generationId = safeGenerationId();
-        const target = downloadTarget.value;
         const bundle = currentPayload || {
           generation_id: generationId,
           blueprint: blueprintOutput.textContent,
           code: codeOutput.textContent,
           qa_report: qaOutput.textContent,
-          bonus_assets: bonusOutput.textContent,
-          logs: Array.from(logOutput.querySelectorAll("span")).map((item) => item.textContent)
+          bonus_assets: bonusOutput.textContent
         };
-
+        const target = downloadTarget.value;
         const downloads = {
-          blueprint: {
-            filename: `${generationId}-blueprint.json`,
-            mime: "application/json;charset=utf-8",
-            content: formatJson(bundle.blueprint)
-          },
-          code: {
-            filename: `${generationId}-unity-controller.cs`,
-            mime: "text/plain;charset=utf-8",
-            content: stripCodeFence(bundle.code || codeOutput.textContent)
-          },
-          qa: {
-            filename: `${generationId}-qa-report.json`,
-            mime: "application/json;charset=utf-8",
-            content: formatJson(bundle.qa_report || qaOutput.textContent)
-          },
-          bundle: {
-            filename: `${generationId}-generation-bundle.json`,
-            mime: "application/json;charset=utf-8",
-            content: JSON.stringify(bundle, null, 2)
-          }
+          blueprint: { filename: `${generationId}-blueprint.json`, mime: "application/json;charset=utf-8", content: formatJson(bundle.blueprint) },
+          code: { filename: bundle.unity_metadata?.recommended_filename || `${generationId}-unity-controller.cs`, mime: "text/plain;charset=utf-8", content: stripCodeFence(bundle.code || codeOutput.textContent) },
+          qa: { filename: `${generationId}-qa-report.json`, mime: "application/json;charset=utf-8", content: formatJson(bundle.qa_report || qaOutput.textContent) },
+          bonus: { filename: `${generationId}-bonus-dialogues.json`, mime: "application/json;charset=utf-8", content: formatJson(bundle.bonus_assets || bonusOutput.textContent) },
+          bundle: { filename: `${generationId}-generation-bundle.json`, mime: "application/json;charset=utf-8", content: JSON.stringify(bundle, null, 2) }
         };
-
         const selected = downloads[target] || downloads.bundle;
         downloadBlob(selected.filename, selected.content, selected.mime);
       }
 
-      function startTimer() {
-        startedAt = performance.now();
-        clearInterval(timerId);
-        timerId = setInterval(() => {
-          elapsedTime.textContent = `${((performance.now() - startedAt) / 1000).toFixed(1)}s`;
-        }, 100);
-      }
-
-      function stopTimer() {
-        clearInterval(timerId);
-        timerId = null;
-        if (startedAt) {
-          elapsedTime.textContent = `${((performance.now() - startedAt) / 1000).toFixed(1)}s`;
-        }
-      }
-
       function resetDashboard() {
+        clearInterval(pollId);
         conceptInput.value = "";
+        templateSelect.value = "";
         updateCharCount();
         statusText.textContent = "백엔드 연결 대기 중";
-        connectionPill.textContent = "대기";
-        connectionPill.className = "rounded-md border border-amber/30 bg-amber/10 px-2 py-1 text-xs font-medium text-amber";
+        jobText.textContent = "대기 중";
+        setConnection("대기", "warn");
         blueprintOutput.textContent = "생성 결과가 여기에 JSON 코드 블록으로 표시됩니다.";
         codeOutput.textContent = "생성 결과가 여기에 C# 코드 블록으로 표시됩니다.";
         qaOutput.textContent = "QA 결과가 여기에 표시됩니다.";
         bonusOutput.textContent = "보너스 대사가 여기에 표시됩니다.";
         renderLogs(["대기"]);
-        updateSteps([]);
+        updateSteps("", []);
         npcName.textContent = "생성된 NPC 없음";
-        systemName.textContent = "-";
         factionName.textContent = "-";
         stateCount.textContent = "0";
         dialogueCount.textContent = "0";
+        latencyText.textContent = "0.0s";
+        qaStatusText.textContent = "-";
+        issueCountText.textContent = "0 critical / 0 total";
+        unityFileText.textContent = "-";
         validationBadge.textContent = "IDLE";
         validationBadge.className = "rounded-md border border-line bg-void/80 px-3 py-1 text-xs text-slate-400";
         tagList.innerHTML = '<span class="rounded-md border border-line bg-panelSoft px-2 py-1 text-xs text-slate-400">태그 대기 중</span>';
         elapsedTime.textContent = "0.0s";
         currentPayload = null;
+        checkBackendHealth();
       }
 
       conceptInput.addEventListener("input", updateCharCount);
+      depthInput.addEventListener("input", () => { depthValue.textContent = depthInput.value; });
+      templateSelect.addEventListener("change", () => {
+        if (!templateSelect.value) return;
+        conceptInput.value = templates[templateSelect.value];
+        updateCharCount();
+      });
+      form.addEventListener("submit", submitGeneration);
       clearButton.addEventListener("click", resetDashboard);
       copyActiveButton.addEventListener("click", copyActiveOutput);
       downloadButton.addEventListener("click", downloadSelectedOutput);
-
-      document.querySelectorAll(".sample-btn").forEach((button) => {
-        button.addEventListener("click", () => {
-          conceptInput.value = samples[button.dataset.sample];
-          updateCharCount();
-          conceptInput.focus();
-        });
+      $("refreshHistoryButton").addEventListener("click", loadHistory);
+      document.querySelectorAll(".app-tab").forEach((button) => {
+        button.addEventListener("click", () => switchAppTab(button.dataset.appTab));
       });
-
-      document.querySelectorAll(".tab-btn").forEach((button) => {
-        button.addEventListener("click", () => setActiveTab(button.dataset.tab));
+      document.querySelectorAll(".asset-tab").forEach((button) => {
+        button.addEventListener("click", () => setActiveAsset(button.dataset.asset));
       });
+      window.matchMedia("(min-width: 768px)").addEventListener("change", () => switchAppTab("compose"));
 
-      form.addEventListener("submit", async (event) => {
-        event.preventDefault();
-        const concept = conceptInput.value.trim();
-        if (!concept) return;
-
-        generateButton.disabled = true;
-        generateLabel.textContent = "생성 중";
-        statusText.textContent = "Gemini 에이전트 파이프라인 실행 중...";
-        connectionPill.textContent = "실행";
-        connectionPill.className = "rounded-md border border-cyan/30 bg-cyan/10 px-2 py-1 text-xs font-medium text-cyan";
-        blueprintOutput.textContent = "응답 대기 중...";
-        codeOutput.textContent = "응답 대기 중...";
-        qaOutput.textContent = "QA 대기 중...";
-        bonusOutput.textContent = "응답 대기 중...";
-        renderLogs(["작업 시작"]);
-        updateSteps([]);
-        setActiveTab("blueprint");
-        startTimer();
-
-        try {
-          const requestBody = {
-            world_setting: {
-              genre: "RPG",
-              lore_summary: "Distopian Incinerator Zone"
-            },
-            user_prompt: concept,
-            max_dialogue_depth: 3
-          };
-          const response = await fetch(apiUrl, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(requestBody)
-          });
-
-          const payload = await response.json();
-          if (!response.ok) {
-            throw new Error(payload.detail || `HTTP ${response.status}`);
-          }
-
-          currentPayload = { input: requestBody, ...payload };
-          blueprintOutput.textContent = formatJson(payload.blueprint);
-          codeOutput.textContent = stripCodeFence(payload.code);
-          qaOutput.textContent = formatJson({
-            final_report: payload.qa_report,
-            healing_history: payload.self_healing
-          });
-          bonusOutput.textContent = renderBonusAssets(payload.bonus_assets);
-          renderLogs(payload.logs);
-          updateSteps(payload.logs);
-          renderSnapshot(payload.blueprint, payload.bonus_assets);
-          statusText.textContent = payload.status === "SUCCESS" ? "생성 및 QA 완료" : `상태: ${payload.status || "UNKNOWN"}`;
-          connectionPill.textContent = "완료";
-          connectionPill.className = "rounded-md border border-acid/30 bg-acid/10 px-2 py-1 text-xs font-medium text-acid";
-        } catch (error) {
-          currentPayload = null;
-          statusText.textContent = `오류: ${error.message}`;
-          connectionPill.textContent = "오류";
-          connectionPill.className = "rounded-md border border-rose/30 bg-rose/10 px-2 py-1 text-xs font-medium text-rose";
-          blueprintOutput.textContent = "요청 처리 중 오류가 발생했습니다.";
-          codeOutput.textContent = "";
-          qaOutput.textContent = "";
-          bonusOutput.textContent = "";
-          renderLogs(["백엔드 서버와 API 키 설정을 확인하세요."]);
-        } finally {
-          stopTimer();
-          generateButton.disabled = false;
-          generateLabel.textContent = "생성";
-        }
-      });
-
-      setActiveTab("blueprint");
+      switchAppTab("compose");
+      setActiveAsset("blueprint");
       updateCharCount();
+      checkBackendHealth();
+      loadHistory();
       lucide.createIcons();
     </script>
   </body>

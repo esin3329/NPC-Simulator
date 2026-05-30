@@ -130,7 +130,6 @@ NPC_BLUEPRINT_RESPONSE_SCHEMA = {
                 "root_node": {"type": "STRING"},
                 "nodes": {
                     "type": "OBJECT",
-                    "additionalProperties": DIALOGUE_NODE_SCHEMA,
                 },
             },
             "required": ["root_node", "nodes"],
