@@ -7,9 +7,9 @@ def run_design_agent(
     genre: str = "RPG",
     lore_summary: str = "Distopian Incinerator Zone",
     max_dialogue_depth: int = 3,
+    api_key: str | None = None,
 ) -> str:
-    # 2.5-flash 무료 쿼터 및 결제 안정 환경으로 완벽 대응
-    client = genai.Client()
+    client = genai.Client(api_key=api_key) if api_key else genai.Client()
     
     system_instruction = (
         "You are an expert game designer & narrative director. "

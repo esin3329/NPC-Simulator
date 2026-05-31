@@ -190,11 +190,16 @@ def run_qa_agent(blueprint_json_str: str, code: str, attempt: int = 1) -> dict[s
     }
 
 
-def run_self_healing_agent(blueprint_json_str: str, code: str, qa_report: dict[str, Any]) -> str:
+def run_self_healing_agent(
+    blueprint_json_str: str,
+    code: str,
+    qa_report: dict[str, Any],
+    api_key: str | None = None,
+) -> str:
     from google import genai
     from google.genai import types
 
-    client = genai.Client()
+    client = genai.Client(api_key=api_key) if api_key else genai.Client()
 
     system_instruction = (
         "You are a senior Unity C# repair agent. "

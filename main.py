@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
@@ -9,10 +10,15 @@ from schemas import GenerateNpcRequest
 app = FastAPI(title="XPRIZE NPC Multi-Agent Server")
 orchestrator = Orchestrator()
 BASE_DIR = Path(__file__).resolve().parent
+CORS_ORIGINS = [
+    origin.strip()
+    for origin in os.getenv("CORS_ORIGINS", "*").split(",")
+    if origin.strip()
+]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=CORS_ORIGINS or ["*"],
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -30,10 +36,10 @@ def health():
 
 @app.post("/api/v1/generate")
 def generate_npc_assets(body: GenerateNpcRequest):
-    if not orchestrator.has_model_api_key():
+    if not orchestrator.has_model_api_key(body):
         raise HTTPException(
             status_code=503,
-            detail="GEMINI_API_KEY or GOOGLE_API_KEY must be configured before generating NPC assets.",
+            detail="Provide client_api_key or configure GEMINI_API_KEY/GOOGLE_API_KEY before generating NPC assets.",
         )
 
     try:
@@ -44,13 +50,16 @@ def generate_npc_assets(body: GenerateNpcRequest):
 
 @app.post("/api/v1/generation-jobs", status_code=202)
 def create_generation_job(body: GenerateNpcRequest):
-    if not orchestrator.has_model_api_key():
+    if not orchestrator.has_model_api_key(body):
         raise HTTPException(
             status_code=503,
-            detail="GEMINI_API_KEY or GOOGLE_API_KEY must be configured before generating NPC assets.",
+            detail="Provide client_api_key or configure GEMINI_API_KEY/GOOGLE_API_KEY before generating NPC assets.",
         )
 
-    return orchestrator.create_generation_job(body)
+    job = orchestrator.create_generation_job(body)
+    if job.get("status") == "REJECTED":
+        raise HTTPException(status_code=429, detail=job["error"])
+    return job
 
 
 @app.get("/api/v1/generation-jobs/{job_id}")

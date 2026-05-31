@@ -1,8 +1,8 @@
 from google import genai
 from google.genai import types
 
-def run_developer_agent(blueprint_json_str: str) -> str:
-    client = genai.Client()
+def run_developer_agent(blueprint_json_str: str, api_key: str | None = None) -> str:
+    client = genai.Client(api_key=api_key) if api_key else genai.Client()
     
     system_instruction = (
         "You are an expert Unity C# gameplay programmer. "

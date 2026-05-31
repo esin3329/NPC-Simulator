@@ -99,7 +99,7 @@ class ProductRegressionTests(unittest.TestCase):
                 generate_npc_assets(request)
 
         self.assertEqual(raised.exception.status_code, 503)
-        self.assertIn("GEMINI_API_KEY", raised.exception.detail)
+        self.assertIn("client_api_key", raised.exception.detail)
 
     def test_mocked_pipeline_saves_successful_generation(self):
         with tempfile.TemporaryDirectory(dir=".") as tmpdir:
@@ -164,6 +164,72 @@ class ProductRegressionTests(unittest.TestCase):
         self.assertEqual(current["result"]["status"], "SUCCESS")
         self.assertIsNotNone(current["generation_id"])
 
+    def test_client_api_key_is_used_but_not_saved(self):
+        with tempfile.TemporaryDirectory(dir=".") as tmpdir:
+            orchestrator = Orchestrator(output_dir=Path(tmpdir))
+            request = GenerateNpcRequest(user_prompt="테스트 NPC", client_api_key="client-secret-key")
+            with patch.dict(os.environ, {"GEMINI_API_KEY": "", "GOOGLE_API_KEY": ""}, clear=False), patch.object(
+                orchestrator_module,
+                "run_design_agent",
+                return_value=json.dumps(SAMPLE_BLUEPRINT, ensure_ascii=False),
+            ) as design, patch.object(
+                orchestrator_module,
+                "run_developer_agent",
+                return_value=VALID_CODE,
+            ) as developer, patch.object(
+                orchestrator_module,
+                "run_bulk_generator",
+                return_value=["기록은 아직 젖어 있습니다."],
+            ) as bulk:
+                result = orchestrator.execute_pipeline(request)
+                saved = orchestrator.get_generation(result["generation_id"])
+
+        design.assert_called()
+        developer.assert_called()
+        bulk.assert_called()
+        self.assertEqual(design.call_args.kwargs["api_key"], "client-secret-key")
+        self.assertEqual(developer.call_args.kwargs["api_key"], "client-secret-key")
+        self.assertEqual(bulk.call_args.kwargs["api_key"], "client-secret-key")
+        serialized = json.dumps(saved)
+        self.assertNotIn("client-secret-key", serialized)
+        self.assertNotIn("client_api_key", serialized)
+
+    def test_active_job_limit_returns_429(self):
+        with tempfile.TemporaryDirectory(dir=".") as tmpdir:
+            test_orchestrator = Orchestrator(output_dir=Path(tmpdir))
+            test_orchestrator.max_active_jobs = 0
+            with patch("main.orchestrator", test_orchestrator), patch.dict(
+                os.environ,
+                {"GEMINI_API_KEY": "test-key", "GOOGLE_API_KEY": ""},
+                clear=False,
+            ):
+                with self.assertRaises(HTTPException) as raised:
+                    create_generation_job(GenerateNpcRequest(user_prompt="테스트 NPC"))
+
+        self.assertEqual(raised.exception.status_code, 429)
+
+    def test_generation_can_run_without_persistent_storage(self):
+        with tempfile.TemporaryDirectory(dir=".") as tmpdir:
+            orchestrator = Orchestrator(output_dir=Path(tmpdir))
+            orchestrator.persist_generations = False
+            with patch.object(
+                orchestrator_module,
+                "run_design_agent",
+                return_value=json.dumps(SAMPLE_BLUEPRINT, ensure_ascii=False),
+            ), patch.object(
+                orchestrator_module,
+                "run_developer_agent",
+                return_value=VALID_CODE,
+            ), patch.object(
+                orchestrator_module,
+                "run_bulk_generator",
+                return_value=["기록은 아직 젖어 있습니다."],
+            ):
+                result = orchestrator.execute_pipeline(GenerateNpcRequest(user_prompt="테스트 NPC"))
+
+        self.assertEqual(result["status"], "SUCCESS")
+        self.assertEqual(orchestrator.list_generations(), [])
+
     def test_qa_agent_flags_invalid_assets(self):
         bad_blueprint = json.dumps(
             {
@@ -198,20 +264,24 @@ class ProductRegressionTests(unittest.TestCase):
     def test_dockerfile_uses_default_port_and_health_endpoint(self):
         dockerfile = Path("Dockerfile").read_text(encoding="utf-8")
 
-        self.assertIn("EXPOSE 8000", dockerfile)
-        self.assertIn("ENV PORT 8000", dockerfile)
+        self.assertIn("EXPOSE 8080", dockerfile)
+        self.assertIn("ENV PORT 8080", dockerfile)
         self.assertIn("HEALTHCHECK", dockerfile)
         self.assertIn("/api/v1/health", dockerfile)
-        self.assertIn('"--port", "8000"', dockerfile)
+        self.assertIn("${PORT:-8080}", dockerfile)
 
     def test_environment_example_documents_model_key_without_hiding_it(self):
         env_example = Path(".env.example").read_text(encoding="utf-8")
         gitignore = Path(".gitignore").read_text(encoding="utf-8")
+        dockerignore = Path(".dockerignore").read_text(encoding="utf-8")
 
         self.assertIn("GEMINI_API_KEY=", env_example)
         self.assertIn("GOOGLE_API_KEY=", env_example)
         self.assertIn(".env.*", gitignore)
         self.assertIn("!.env.example", gitignore)
+        self.assertIn(".env", dockerignore)
+        self.assertIn(".venv", dockerignore)
+        self.assertIn("outputs", dockerignore)
 
     def test_gemini_response_schema_avoids_unsupported_additional_properties(self):
         serialized_schema = json.dumps(NPC_BLUEPRINT_RESPONSE_SCHEMA)

@@ -42,28 +42,43 @@ class Orchestrator:
         self.output_dir = output_dir or Path(__file__).resolve().parent / "outputs" / "generations"
         self._jobs: dict[str, dict] = {}
         self._jobs_lock = threading.Lock()
+        self.max_active_jobs = int(os.getenv("MAX_ACTIVE_JOBS", "2"))
+        self.max_healing_attempts = int(os.getenv("MAX_HEALING_ATTEMPTS", str(self.MAX_HEALING_ATTEMPTS)))
+        self.bonus_dialogue_count = int(os.getenv("BONUS_DIALOGUE_COUNT", "10"))
+        self.persist_generations = os.getenv("PERSIST_GENERATIONS", "true").lower() not in {"0", "false", "no"}
 
-    def has_model_api_key(self) -> bool:
-        return bool(os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY"))
+    def has_model_api_key(self, request: GenerateNpcRequest | None = None) -> bool:
+        return bool(
+            (request and request.client_api_key)
+            or os.getenv("GEMINI_API_KEY")
+            or os.getenv("GOOGLE_API_KEY")
+        )
 
     def health_status(self) -> dict:
         checks = {
             "gemini_api_key": self.has_model_api_key(),
-            "generation_storage_writable": False,
+            "generation_storage_writable": not self.persist_generations,
         }
 
-        try:
-            self.output_dir.mkdir(parents=True, exist_ok=True)
-            probe_path = self.output_dir / ".healthcheck"
-            probe_path.write_text("ok", encoding="utf-8")
-            probe_path.unlink(missing_ok=True)
-            checks["generation_storage_writable"] = True
-        except OSError:
-            checks["generation_storage_writable"] = False
+        if self.persist_generations:
+            try:
+                self.output_dir.mkdir(parents=True, exist_ok=True)
+                probe_path = self.output_dir / ".healthcheck"
+                probe_path.write_text("ok", encoding="utf-8")
+                probe_path.unlink(missing_ok=True)
+                checks["generation_storage_writable"] = True
+            except OSError:
+                checks["generation_storage_writable"] = False
 
         return {
             "status": "ok" if all(checks.values()) else "degraded",
             "checks": checks,
+            "config": {
+                "persist_generations": self.persist_generations,
+                "max_active_jobs": self.max_active_jobs,
+                "max_healing_attempts": self.max_healing_attempts,
+                "bonus_dialogue_count": self.bonus_dialogue_count,
+            },
         }
 
     def _validate_blueprint(self, raw_blueprint: str) -> tuple[str | None, str | None]:
@@ -142,9 +157,15 @@ class Orchestrator:
         }
 
     def _save_generation(self, generation_id: str, payload: dict) -> None:
+        if not self.persist_generations:
+            return
+
         self.output_dir.mkdir(parents=True, exist_ok=True)
         target = self.output_dir / f"{generation_id}.json"
         target.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    def _safe_request_dump(self, request: GenerateNpcRequest) -> dict:
+        return request.model_dump(exclude={"client_api_key"})
 
     def list_generations(self) -> list[dict]:
         if not self.output_dir.exists():
@@ -204,6 +225,13 @@ class Orchestrator:
             "error": None,
         }
         with self._jobs_lock:
+            active_count = sum(1 for item in self._jobs.values() if item.get("status") in {"QUEUED", "RUNNING"})
+            if active_count >= self.max_active_jobs:
+                return {
+                    "status": "REJECTED",
+                    "error": "Too many active generation jobs. Please retry after another job finishes.",
+                    "max_active_jobs": self.max_active_jobs,
+                }
             self._jobs[job_id] = job
 
         thread = threading.Thread(target=self._run_generation_job, args=(job_id, request), daemon=True)
@@ -242,6 +270,7 @@ class Orchestrator:
         blueprint = None
         last_blueprint_error = None
         last_raw_blueprint = None
+        api_key = request.client_api_key
 
         if progress_callback:
             progress_callback("design", "Design Agent is building the NPC blueprint.")
@@ -252,6 +281,7 @@ class Orchestrator:
                 genre=request.world_setting.genre,
                 lore_summary=request.world_setting.lore_summary,
                 max_dialogue_depth=request.max_dialogue_depth,
+                api_key=api_key,
             )
             model_calls += 1
             blueprint, last_blueprint_error = self._validate_blueprint(last_raw_blueprint)
@@ -289,13 +319,13 @@ class Orchestrator:
             }
             payload["unity_metadata"] = self._build_unity_metadata(payload["blueprint"], payload["code"])
             payload["summary"] = self._build_result_summary(payload)
-            bundle = {"input": request.model_dump(), **payload}
+            bundle = {"input": self._safe_request_dump(request), **payload}
             self._save_generation(generation_id, bundle)
             return payload
 
         if progress_callback:
             progress_callback("code", "Developer Agent is compiling the Unity controller.")
-        code = run_developer_agent(blueprint)
+        code = run_developer_agent(blueprint, api_key=api_key)
         model_calls += 1
         logs.append("C# Code compiled via 2.5 Flash.")
 
@@ -305,14 +335,14 @@ class Orchestrator:
         logs.append(f"QA Agent validation attempt 1: {qa_report['status']}.")
 
         healing_reports = [qa_report]
-        for attempt in range(1, self.MAX_HEALING_ATTEMPTS + 1):
+        for attempt in range(1, self.max_healing_attempts + 1):
             if qa_report["status"] == "PASSED":
                 break
 
             logs.append(f"Self-healing iteration {attempt} started with {qa_report['issue_count']} issue(s).")
             if progress_callback:
                 progress_callback("self-healing", f"Self-healing iteration {attempt} is repairing issues.")
-            code = run_self_healing_agent(blueprint, code, qa_report)
+            code = run_self_healing_agent(blueprint, code, qa_report, api_key=api_key)
             model_calls += 1
             healing_attempts += 1
             qa_report = run_qa_agent(blueprint, code, attempt=attempt + 1)
@@ -321,7 +351,7 @@ class Orchestrator:
 
         if progress_callback:
             progress_callback("bonus-assets", "Bonus ambient dialogue batch is being generated.")
-        bulk_dialogues = run_bulk_generator(blueprint, count=10)
+        bulk_dialogues = run_bulk_generator(blueprint, count=self.bonus_dialogue_count, api_key=api_key)
         model_calls += 1
         logs.append("Bonus ambient dialogues batch generated via 2.5 Flash.")
 
@@ -341,7 +371,7 @@ class Orchestrator:
         }
         payload["unity_metadata"] = self._build_unity_metadata(blueprint, code)
         payload["summary"] = self._build_result_summary(payload)
-        bundle = {"input": request.model_dump(), **payload}
+        bundle = {"input": self._safe_request_dump(request), **payload}
         if progress_callback:
             progress_callback("saved", "Saving generation bundle.")
         self._save_generation(generation_id, bundle)

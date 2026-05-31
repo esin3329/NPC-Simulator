@@ -118,6 +118,20 @@
             </select>
           </div>
 
+          <label class="block">
+            <div class="mb-2 flex items-center justify-between gap-3">
+              <span class="text-sm font-medium text-slate-200">내 Gemini API 키</span>
+              <span class="text-xs text-slate-500">저장 안 함</span>
+            </div>
+            <input
+              id="clientApiKeyInput"
+              type="password"
+              autocomplete="off"
+              class="h-11 w-full rounded-md border border-line bg-void/90 px-3 text-sm text-slate-100 outline-none transition placeholder:text-slate-500 focus:border-cyan"
+              placeholder="비워두면 서버 데모 키를 사용합니다."
+            />
+          </label>
+
           <div class="grid gap-3">
             <label class="block">
               <span class="mb-2 block text-sm font-medium text-slate-200">장르</span>
@@ -247,6 +261,10 @@
                 <option value="bundle">Full bundle</option>
               </select>
               <button id="downloadButton" type="button" title="다운로드" class="grid h-9 w-9 place-items-center rounded-md border border-line bg-panelSoft text-slate-300 transition hover:border-acid hover:text-acid"><i data-lucide="download" class="h-4 w-4"></i></button>
+              <button id="downloadBundleButton" type="button" class="inline-flex h-9 items-center gap-2 rounded-md border border-acid/50 bg-acid/10 px-3 text-xs font-semibold text-acid transition hover:bg-acid/15">
+                <i data-lucide="package-down" class="h-4 w-4"></i>
+                Bundle
+              </button>
             </div>
           </div>
           <div class="min-h-0 flex-1 overflow-hidden p-5">
@@ -267,8 +285,13 @@
               <div>
                 <p class="text-xs font-semibold uppercase tracking-[0.2em] text-acid">History</p>
                 <h2 class="mt-1 text-lg font-semibold text-white">저장된 생성물</h2>
+                <p class="mt-1 text-xs text-slate-500">배포 환경에서는 임시 이력입니다. JSON bundle 다운로드를 권장합니다.</p>
               </div>
-              <button id="refreshHistoryButton" type="button" title="새로고침" class="grid h-9 w-9 place-items-center rounded-md border border-line bg-panelSoft text-slate-300 transition hover:border-cyan hover:text-cyan"><i data-lucide="refresh-cw" class="h-4 w-4"></i></button>
+              <div class="flex gap-2">
+                <input id="bundleUploadInput" type="file" accept="application/json,.json" class="hidden" />
+                <button id="uploadBundleButton" type="button" title="Bundle 열기" class="grid h-9 w-9 place-items-center rounded-md border border-line bg-panelSoft text-slate-300 transition hover:border-acid hover:text-acid"><i data-lucide="file-up" class="h-4 w-4"></i></button>
+                <button id="refreshHistoryButton" type="button" title="새로고침" class="grid h-9 w-9 place-items-center rounded-md border border-line bg-panelSoft text-slate-300 transition hover:border-cyan hover:text-cyan"><i data-lucide="refresh-cw" class="h-4 w-4"></i></button>
+              </div>
             </div>
             <div id="historyList" class="grid max-h-[420px] gap-3 overflow-auto p-5 md:max-h-[520px]">
               <p class="text-sm text-slate-400">히스토리를 불러오는 중입니다.</p>
@@ -307,6 +330,7 @@
       const depthInput = $("depthInput");
       const depthValue = $("depthValue");
       const templateSelect = $("templateSelect");
+      const clientApiKeyInput = $("clientApiKeyInput");
       const generateButton = $("generateButton");
       const generateLabel = $("generateLabel");
       const clearButton = $("clearButton");
@@ -321,6 +345,7 @@
       const copyActiveButton = $("copyActiveButton");
       const downloadTarget = $("downloadTarget");
       const downloadButton = $("downloadButton");
+      const downloadBundleButton = $("downloadBundleButton");
       const npcName = $("npcName");
       const validationBadge = $("validationBadge");
       const factionName = $("factionName");
@@ -334,6 +359,8 @@
       const jobText = $("jobText");
       const historyList = $("historyList");
       const comparePanel = $("comparePanel");
+      const uploadBundleButton = $("uploadBundleButton");
+      const bundleUploadInput = $("bundleUploadInput");
 
       const apiBaseUrl = window.location.protocol === "file:" ? "http://127.0.0.1:8000" : window.location.origin;
       const urls = {
@@ -352,6 +379,16 @@
       let timerId = null;
       let pollId = null;
       let startedAt = 0;
+
+      function trackEvent(name, params = {}) {
+        if (window.gtag) {
+          window.gtag("event", name, params);
+        }
+        if (window.plausible) {
+          window.plausible(name, { props: params });
+        }
+        window.dispatchEvent(new CustomEvent("npcsim:analytics", { detail: { name, params } }));
+      }
 
       function escapeHtml(value) {
         return String(value)
@@ -498,7 +535,7 @@
       }
 
       function buildRequestBody() {
-        return {
+        const body = {
           world_setting: {
             genre: genreInput.value.trim() || "RPG",
             lore_summary: loreInput.value.trim() || "Distopian Incinerator Zone"
@@ -506,6 +543,9 @@
           user_prompt: conceptInput.value.trim(),
           max_dialogue_depth: Number(depthInput.value)
         };
+        const apiKey = clientApiKeyInput.value.trim();
+        if (apiKey) body.client_api_key = apiKey;
+        return body;
       }
 
       async function checkBackendHealth() {
@@ -522,7 +562,7 @@
             const missingKey = payload.checks?.gemini_api_key === false;
             statusText.textContent = missingKey ? "Gemini API 키 설정 필요" : "백엔드 설정 확인 필요";
             setConnection("설정", "warn");
-            renderLogs(missingKey ? ["GEMINI_API_KEY 또는 GOOGLE_API_KEY를 설정하세요."] : ["Health check가 degraded 상태입니다."]);
+            renderLogs(missingKey ? ["서버 키가 없습니다. 내 Gemini API 키를 입력하면 생성할 수 있습니다."] : ["Health check가 degraded 상태입니다."]);
           }
         } catch (error) {
           statusText.textContent = `백엔드 연결 오류: ${error.message}`;
@@ -603,6 +643,7 @@
           const payload = await response.json();
           if (!response.ok) throw new Error(payload.detail || `HTTP ${response.status}`);
           renderPayload(payload);
+          trackEvent("history_opened", { generation_id: generationId });
           statusText.textContent = "저장된 생성물을 열었습니다";
           switchAppTab("result");
         } catch (error) {
@@ -623,6 +664,7 @@
               clearInterval(pollId);
               stopTimer();
               renderPayload(job.result);
+              trackEvent("job_completed", { status: job.result?.status || "UNKNOWN" });
               statusText.textContent = "생성 및 QA 완료";
               setConnection("완료", "ok");
               generateButton.disabled = false;
@@ -636,6 +678,7 @@
             clearInterval(pollId);
             stopTimer();
             statusText.textContent = `오류: ${error.message}`;
+            trackEvent("generation_failed", { message: error.message });
             setConnection("오류", "error");
             generateButton.disabled = false;
             generateLabel.textContent = "생성";
@@ -648,6 +691,7 @@
         event.preventDefault();
         const requestBody = buildRequestBody();
         if (!requestBody.user_prompt) return;
+        if (requestBody.client_api_key) trackEvent("api_key_entered");
         clearInterval(pollId);
         generateButton.disabled = true;
         generateLabel.textContent = "생성 중";
@@ -672,6 +716,7 @@
           });
           const job = await response.json();
           if (!response.ok) throw new Error(job.detail || `HTTP ${response.status}`);
+          trackEvent("job_started", { has_client_api_key: Boolean(requestBody.client_api_key) });
           jobText.textContent = `${job.status} / ${job.stage}`;
           pollJob(job.job_id);
         } catch (error) {
@@ -679,6 +724,7 @@
           generateButton.disabled = false;
           generateLabel.textContent = "생성";
           statusText.textContent = `오류: ${error.message}`;
+          trackEvent("generation_failed", { message: error.message });
           setConnection("오류", "error");
           blueprintOutput.textContent = "요청 처리 중 오류가 발생했습니다.";
         }
@@ -729,12 +775,38 @@
           bundle: { filename: `${generationId}-generation-bundle.json`, mime: "application/json;charset=utf-8", content: JSON.stringify(bundle, null, 2) }
         };
         const selected = downloads[target] || downloads.bundle;
+        trackEvent(target === "bundle" ? "bundle_downloaded" : "asset_downloaded", { target });
         downloadBlob(selected.filename, selected.content, selected.mime);
+      }
+
+      function downloadBundle() {
+        const previous = downloadTarget.value;
+        downloadTarget.value = "bundle";
+        downloadSelectedOutput();
+        downloadTarget.value = previous;
+      }
+
+      function openBundleFile(file) {
+        if (!file) return;
+        const reader = new FileReader();
+        reader.addEventListener("load", () => {
+          try {
+            const payload = JSON.parse(reader.result);
+            renderPayload(payload);
+            statusText.textContent = "JSON bundle을 열었습니다";
+            trackEvent("bundle_uploaded");
+            switchAppTab("result");
+          } catch (error) {
+            statusText.textContent = `Bundle 열기 오류: ${error.message}`;
+          }
+        });
+        reader.readAsText(file);
       }
 
       function resetDashboard() {
         clearInterval(pollId);
         conceptInput.value = "";
+        clientApiKeyInput.value = "";
         templateSelect.value = "";
         updateCharCount();
         statusText.textContent = "백엔드 연결 대기 중";
@@ -767,12 +839,16 @@
       templateSelect.addEventListener("change", () => {
         if (!templateSelect.value) return;
         conceptInput.value = templates[templateSelect.value];
+        trackEvent("template_selected", { template: templateSelect.value });
         updateCharCount();
       });
       form.addEventListener("submit", submitGeneration);
       clearButton.addEventListener("click", resetDashboard);
       copyActiveButton.addEventListener("click", copyActiveOutput);
       downloadButton.addEventListener("click", downloadSelectedOutput);
+      downloadBundleButton.addEventListener("click", downloadBundle);
+      uploadBundleButton.addEventListener("click", () => bundleUploadInput.click());
+      bundleUploadInput.addEventListener("change", () => openBundleFile(bundleUploadInput.files[0]));
       $("refreshHistoryButton").addEventListener("click", loadHistory);
       document.querySelectorAll(".app-tab").forEach((button) => {
         button.addEventListener("click", () => switchAppTab(button.dataset.appTab));
@@ -785,6 +861,7 @@
       switchAppTab("compose");
       setActiveAsset("blueprint");
       updateCharCount();
+      trackEvent("page_view");
       checkBackendHealth();
       loadHistory();
       lucide.createIcons();

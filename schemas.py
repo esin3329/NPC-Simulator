@@ -12,6 +12,7 @@ class GenerateNpcRequest(BaseModel):
     world_setting: WorldSetting = Field(default_factory=WorldSetting)
     user_prompt: str
     max_dialogue_depth: int = Field(default=3, ge=1, le=8)
+    client_api_key: str | None = Field(default=None, exclude=True, min_length=8)
 
 
 class DialogueOption(BaseModel):
