@@ -29,6 +29,11 @@ def dashboard():
     return FileResponse(BASE_DIR / "index.html")
 
 
+@app.get("/favicon.svg")
+def favicon():
+    return FileResponse(BASE_DIR / "favicon.svg", media_type="image/svg+xml")
+
+
 @app.get("/api/v1/health")
 def health():
     return orchestrator.health_status()
