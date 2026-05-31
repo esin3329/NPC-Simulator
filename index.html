@@ -73,16 +73,16 @@
           </div>
           <div class="mt-5 grid grid-cols-3 gap-2 text-center">
             <div class="rounded-md border border-line bg-void/70 p-3">
-              <p class="text-[11px] uppercase tracking-[0.18em] text-slate-500">Model</p>
-              <p class="mt-1 text-sm font-semibold text-cyan">2.5 Flash</p>
+              <p class="text-[11px] uppercase tracking-[0.18em] text-slate-500">JSON</p>
+              <p class="mt-1 text-sm font-semibold text-cyan">설계서</p>
             </div>
             <div class="rounded-md border border-line bg-void/70 p-3">
-              <p class="text-[11px] uppercase tracking-[0.18em] text-slate-500">Mode</p>
-              <p class="mt-1 text-sm font-semibold text-acid">Async</p>
+              <p class="text-[11px] uppercase tracking-[0.18em] text-slate-500">C#</p>
+              <p class="mt-1 text-sm font-semibold text-acid">Unity</p>
             </div>
             <div class="rounded-md border border-line bg-void/70 p-3">
-              <p class="text-[11px] uppercase tracking-[0.18em] text-slate-500">Target</p>
-              <p class="mt-1 text-sm font-semibold text-rose">Unity</p>
+              <p class="text-[11px] uppercase tracking-[0.18em] text-slate-500">QA</p>
+              <p class="mt-1 text-sm font-semibold text-rose">검증</p>
             </div>
           </div>
         </header>
@@ -128,7 +128,7 @@
               type="password"
               autocomplete="off"
               class="h-11 w-full rounded-md border border-line bg-void/90 px-3 text-sm text-slate-100 outline-none transition placeholder:text-slate-500 focus:border-cyan"
-              placeholder="비워두면 서버 데모 키를 사용합니다."
+              placeholder="본인 Gemini API 키를 입력하세요."
             />
             <p class="mt-2 text-xs leading-5 text-slate-500">API 키는 저장되지 않고 생성 요청에만 사용됩니다.</p>
           </label>
@@ -140,7 +140,7 @@
             </label>
             <label class="block">
               <span class="mb-2 block text-sm font-medium text-slate-200">세계관 요약</span>
-              <textarea id="loreInput" class="min-h-24 w-full resize-y rounded-md border border-line bg-void/90 p-3 text-sm leading-6 text-slate-100 outline-none transition focus:border-cyan">Distopian Incinerator Zone</textarea>
+              <textarea id="loreInput" class="min-h-24 w-full resize-y rounded-md border border-line bg-void/90 p-3 text-sm leading-6 text-slate-100 outline-none transition focus:border-cyan">마법과 기계가 공존하는 디스토피아 소각장 도시</textarea>
             </label>
             <label class="block">
               <div class="mb-2 flex items-center justify-between">
@@ -151,10 +151,10 @@
             </label>
           </div>
 
-          <div class="grid grid-cols-[1fr_auto] items-center gap-3 rounded-md border border-line bg-void/75 p-3">
+          <div class="grid grid-cols-[1fr_auto] items-center gap-3 rounded-md border border-line bg-void/75 p-3 text-xs">
             <div class="min-w-0">
-              <p class="text-[11px] uppercase tracking-[0.18em] text-slate-500">Endpoint</p>
-              <code class="mt-1 block truncate text-xs text-cyan">POST /api/v1/generation-jobs</code>
+              <p class="text-[11px] uppercase tracking-[0.18em] text-slate-500">상태</p>
+              <p class="mt-1 block truncate text-slate-300">API 키 입력 후 생성할 수 있습니다.</p>
             </div>
             <span id="connectionPill" class="rounded-md border border-amber/30 bg-amber/10 px-2 py-1 text-xs font-medium text-amber">대기</span>
           </div>
@@ -264,7 +264,7 @@
               <button id="downloadButton" type="button" title="다운로드" class="grid h-9 w-9 place-items-center rounded-md border border-line bg-panelSoft text-slate-300 transition hover:border-acid hover:text-acid"><i data-lucide="download" class="h-4 w-4"></i></button>
               <button id="downloadBundleButton" type="button" class="inline-flex h-9 items-center gap-2 rounded-md border border-acid/50 bg-acid/10 px-3 text-xs font-semibold text-acid transition hover:bg-acid/15">
                 <i data-lucide="package-down" class="h-4 w-4"></i>
-                Bundle
+                전체 저장
               </button>
             </div>
           </div>
@@ -286,7 +286,7 @@
               <div>
                 <p class="text-xs font-semibold uppercase tracking-[0.2em] text-acid">History</p>
                 <h2 class="mt-1 text-lg font-semibold text-white">저장된 생성물</h2>
-                <p class="mt-1 text-xs text-slate-500">배포 환경에서는 임시 이력입니다. JSON bundle 다운로드를 권장합니다.</p>
+                <p class="mt-1 text-xs text-slate-500">결과는 Bundle 파일로 저장해 두세요.</p>
               </div>
               <div class="flex gap-2">
                 <input id="bundleUploadInput" type="file" accept="application/json,.json" class="hidden" />
@@ -539,7 +539,7 @@
         const body = {
           world_setting: {
             genre: genreInput.value.trim() || "RPG",
-            lore_summary: loreInput.value.trim() || "Distopian Incinerator Zone"
+            lore_summary: loreInput.value.trim() || "마법과 기계가 공존하는 디스토피아 소각장 도시"
           },
           user_prompt: conceptInput.value.trim(),
           max_dialogue_depth: Number(depthInput.value)
@@ -563,7 +563,7 @@
             const missingKey = payload.checks?.gemini_api_key === false;
             statusText.textContent = missingKey ? "Gemini API 키 설정 필요" : "백엔드 설정 확인 필요";
             setConnection("설정", "warn");
-            renderLogs(missingKey ? ["서버 키가 없습니다. 내 Gemini API 키를 입력하면 생성할 수 있습니다."] : ["Health check가 degraded 상태입니다."]);
+            renderLogs(missingKey ? ["내 Gemini API 키를 입력한 뒤 생성해 주세요."] : ["Health check가 degraded 상태입니다."]);
           }
         } catch (error) {
           statusText.textContent = `백엔드 연결 오류: ${error.message}`;
