@@ -70,7 +70,9 @@ GOOGLE_API_KEY=optional_demo_key
 MAX_ACTIVE_JOBS=2
 MAX_HEALING_ATTEMPTS=3
 BONUS_DIALOGUE_COUNT=10
-PERSIST_GENERATIONS=true
+PERSIST_GENERATIONS=true   # Cloud Run(K_SERVICE 설정 시) 기본값은 false
+JOB_TTL_SECONDS=3600       # 완료된 job 결과를 메모리에 보관하는 시간
+MAX_FINISHED_JOBS=50       # 메모리에 보관하는 완료 job 최대 개수
 CORS_ORIGINS=*
 ```
 
@@ -168,6 +170,13 @@ gcloud run deploy npc-simulator \
   --max-instances 1 \
   --set-env-vars PERSIST_GENERATIONS=false,MAX_ACTIVE_JOBS=6,MAX_HEALING_ATTEMPTS=3,BONUS_DIALOGUE_COUNT=10
 ```
+
+Cloud Run 주의 사항:
+
+- 생성 job은 인스턴스 메모리와 백그라운드 스레드에서 실행됩니다. `--max-instances 1`이 아니면 job 상태 조회가 다른 인스턴스로 라우팅되어 404가 날 수 있습니다. 여러 인스턴스로 확장하려면 Cloud Tasks/Firestore 같은 외부 큐와 저장소가 필요합니다.
+- Cloud Run 기본 설정은 응답 후 CPU를 제한하므로 약 2분 걸리는 백그라운드 생성이 멈출 수 있습니다. `--no-cpu-throttling`(CPU always allocated)을 사용하세요.
+- `K_SERVICE` 환경 변수가 있으면(Cloud Run) `PERSIST_GENERATIONS`의 기본값은 `false`입니다. 저장을 켜면 `/api/v1/generations`가 인증 없이 모든 생성 결과를 노출하므로 공개 배포에서는 켜지 마세요.
+- 동기 `/api/v1/generate`와 비동기 job은 같은 `MAX_ACTIVE_JOBS` 한도를 공유하며, 한도를 넘으면 `429`를 반환합니다.
 
 ## Cloudflare 도입 단계
 

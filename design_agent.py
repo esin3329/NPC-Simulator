@@ -8,6 +8,7 @@ def run_design_agent(
     lore_summary: str = "Distopian Incinerator Zone",
     max_dialogue_depth: int = 3,
     api_key: str | None = None,
+    previous_error: str | None = None,
 ) -> str:
     client = genai.Client(api_key=api_key) if api_key else genai.Client()
     
@@ -71,6 +72,12 @@ def run_design_agent(
         "- Every node.state_context must be one of npc_profile.base_states.\n"
         "- runtime_simulation_sandbox.agent_conversations must contain at least 3 turns."
     )
+    if previous_error:
+        contents += (
+            "\n\nYour previous answer was rejected by the validator with this error. "
+            "Fix it and return the full corrected JSON object:\n"
+            f"{previous_error[:2000]}"
+        )
     
     response = client.models.generate_content(
         model='gemini-2.5-flash',
