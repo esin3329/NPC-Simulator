@@ -11,7 +11,7 @@ NPC Simulator was tested at the FastAPI/API layer, orchestration layer, QA valid
 | Area | Evidence | Result |
 | --- | --- | --- |
 | Python syntax/import health | `python -m py_compile main.py schemas.py orchestrator.py design_agent.py developer_agent.py qa_agent.py bulk_generator.py` | Passed |
-| Automated regression suite | `python -m unittest discover -s tests -v` | 13 tests passed |
+| Automated regression suite | `python -m unittest discover -s tests -v` | 25 tests passed |
 | Default local port | `uvicorn main:app --host 127.0.0.1 --port 8000` | Server started |
 | Dashboard | `GET /` on port `8000` | `200 OK` |
 | Dashboard preflight status | Frontend calls `/api/v1/health` on load | Shows missing API key before generation |
@@ -65,6 +65,22 @@ NPC Simulator was tested at the FastAPI/API layer, orchestration layer, QA valid
 9. Removing `additionalProperties` made `dialogue_system.nodes` too weakly constrained for Gemini's structured output.
    - Impact: A live generation returned `NEEDS_REVIEW` because `nodes` was `{}` after three design attempts.
    - Fix applied: Moved the dynamic dialogue-node contract into the design prompt and stopped passing `response_schema` to the design call. The follow-up live generation returned `SUCCESS` with QA `PASSED`.
+
+10. The QA validator treated dialogue text inside C# strings as code.
+   - Impact: Lines such as `"그건... 잊혀진 기록이야"` were flagged as placeholders and `":)"` as unbalanced delimiters, so correct code burned self-healing calls and still ended as `NEEDS_REVIEW`.
+   - Fix applied: String/char literals are blanked before checks (comments are kept for the TODO/placeholder check), and prose around a fenced code block is dropped before validation and storage.
+
+11. Self-healing could not fix blueprint issues, and design retries resampled blindly.
+   - Impact: A blueprint whose `state_context` was not in `base_states` passed Pydantic validation, failed QA, and then wasted every healing attempt because healing only rewrites C#.
+   - Fix applied: `NpcBlueprint` now enforces the same rule as QA, the validation error is passed back to the design agent on retry, and healing stops when the remaining issues are not in the code.
+
+12. In-memory jobs grew without bound and Cloud Run constraints were undocumented.
+   - Impact: Every finished job kept its full result in memory forever; multi-instance or CPU-throttled Cloud Run deployments could lose or stall background jobs.
+   - Fix applied: Finished jobs are pruned by `JOB_TTL_SECONDS` and `MAX_FINISHED_JOBS`; README documents `--max-instances 1` and `--no-cpu-throttling`.
+
+13. Cost and exposure gaps in the public API.
+   - Impact: `/api/v1/generate` ignored `MAX_ACTIVE_JOBS`, 500 responses echoed raw SDK errors, and the default `PERSIST_GENERATIONS=true` exposed all results via `/api/v1/generations`.
+   - Fix applied: Sync and async generation share one concurrency budget (`429` when full), errors are logged server-side and returned generically, and persistence defaults to off when `K_SERVICE` (Cloud Run) is set.
 
 ## Live Verification Result
 

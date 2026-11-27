@@ -1,4 +1,5 @@
 import json
+import logging
 import os
 import re
 import threading
@@ -12,7 +13,7 @@ from pydantic import ValidationError
 from design_agent import run_design_agent
 from developer_agent import run_developer_agent
 from bulk_generator import run_bulk_generator
-from qa_agent import run_qa_agent, run_self_healing_agent
+from qa_agent import run_qa_agent, run_self_healing_agent, strip_code_fence
 from schemas import GenerateNpcRequest, NpcBlueprint
 
 
@@ -33,19 +34,42 @@ def load_env_file(env_path: Path | None = None) -> None:
             os.environ[key] = value
 
 
+logger = logging.getLogger("npc_simulator")
+
+ACTIVE_JOB_LIMIT_MESSAGE = "Too many active generation jobs. Please retry after another job finishes."
+GENERATION_FAILED_MESSAGE = "Generation failed due to an upstream model or server error. Please retry."
+
+
+class ActiveJobLimitError(RuntimeError):
+    pass
+
+
+def _default_persist_generations() -> str:
+    # Cloud Run sets K_SERVICE. There, the generation list endpoints would expose every
+    # user's prompts and results, so persistence is opt-in unless explicitly configured.
+    return "false" if os.getenv("K_SERVICE") else "true"
+
+
 class Orchestrator:
     MAX_HEALING_ATTEMPTS = 3
     MAX_DESIGN_RETRIES = 2
+    ACTIVE_STATUSES = {"QUEUED", "RUNNING"}
 
     def __init__(self, output_dir: Path | None = None) -> None:
         load_env_file()
         self.output_dir = output_dir or Path(__file__).resolve().parent / "outputs" / "generations"
         self._jobs: dict[str, dict] = {}
+        self._job_finished_at: dict[str, float] = {}
+        self._active_sync_runs = 0
         self._jobs_lock = threading.Lock()
         self.max_active_jobs = int(os.getenv("MAX_ACTIVE_JOBS", "2"))
         self.max_healing_attempts = int(os.getenv("MAX_HEALING_ATTEMPTS", str(self.MAX_HEALING_ATTEMPTS)))
         self.bonus_dialogue_count = int(os.getenv("BONUS_DIALOGUE_COUNT", "10"))
-        self.persist_generations = os.getenv("PERSIST_GENERATIONS", "true").lower() not in {"0", "false", "no"}
+        self.job_ttl_seconds = int(os.getenv("JOB_TTL_SECONDS", "3600"))
+        self.max_finished_jobs = int(os.getenv("MAX_FINISHED_JOBS", "50"))
+        self.persist_generations = os.getenv(
+            "PERSIST_GENERATIONS", _default_persist_generations()
+        ).lower() not in {"0", "false", "no"}
 
     def has_model_api_key(self, request: GenerateNpcRequest | None = None) -> bool:
         return bool(
@@ -210,6 +234,41 @@ class Orchestrator:
                 return
             job.update(updates)
             job["updated_at"] = datetime.now(UTC).isoformat()
+            if job.get("status") not in self.ACTIVE_STATUSES:
+                self._job_finished_at.setdefault(job_id, time.monotonic())
+
+    def _active_count_locked(self) -> int:
+        active_jobs = sum(1 for item in self._jobs.values() if item.get("status") in self.ACTIVE_STATUSES)
+        return active_jobs + self._active_sync_runs
+
+    def _prune_jobs_locked(self) -> None:
+        """Drop finished jobs (and their full result payloads) so memory stays bounded."""
+        now = time.monotonic()
+        expired = [
+            job_id for job_id, finished in self._job_finished_at.items() if now - finished > self.job_ttl_seconds
+        ]
+        overflow = len(self._job_finished_at) - len(expired) - self.max_finished_jobs
+        if overflow > 0:
+            remaining = sorted(
+                (finished, job_id) for job_id, finished in self._job_finished_at.items() if job_id not in expired
+            )
+            expired.extend(job_id for _, job_id in remaining[:overflow])
+        for job_id in expired:
+            self._jobs.pop(job_id, None)
+            self._job_finished_at.pop(job_id, None)
+
+    def run_pipeline_with_limit(self, request: GenerateNpcRequest) -> dict:
+        """Synchronous generation that shares the MAX_ACTIVE_JOBS budget with async jobs."""
+        with self._jobs_lock:
+            self._prune_jobs_locked()
+            if self._active_count_locked() >= self.max_active_jobs:
+                raise ActiveJobLimitError(ACTIVE_JOB_LIMIT_MESSAGE)
+            self._active_sync_runs += 1
+        try:
+            return self.execute_pipeline(request)
+        finally:
+            with self._jobs_lock:
+                self._active_sync_runs -= 1
 
     def create_generation_job(self, request: GenerateNpcRequest) -> dict:
         job_id = uuid4().hex
@@ -225,11 +284,11 @@ class Orchestrator:
             "error": None,
         }
         with self._jobs_lock:
-            active_count = sum(1 for item in self._jobs.values() if item.get("status") in {"QUEUED", "RUNNING"})
-            if active_count >= self.max_active_jobs:
+            self._prune_jobs_locked()
+            if self._active_count_locked() >= self.max_active_jobs:
                 return {
                     "status": "REJECTED",
-                    "error": "Too many active generation jobs. Please retry after another job finishes.",
+                    "error": ACTIVE_JOB_LIMIT_MESSAGE,
                     "max_active_jobs": self.max_active_jobs,
                 }
             self._jobs[job_id] = job
@@ -257,8 +316,16 @@ class Orchestrator:
                 result=result,
                 message="Generation saved.",
             )
-        except Exception as exc:
-            self._set_job(job_id, status="FAILED", stage="failed", error=str(exc), message=str(exc))
+        except Exception:
+            # Details stay in server logs; SDK errors can include request internals.
+            logger.exception("Generation job %s failed", job_id)
+            self._set_job(
+                job_id,
+                status="FAILED",
+                stage="failed",
+                error=GENERATION_FAILED_MESSAGE,
+                message=GENERATION_FAILED_MESSAGE,
+            )
 
     def execute_pipeline(self, request: GenerateNpcRequest, progress_callback=None) -> dict:
         started_at = time.perf_counter()
@@ -282,6 +349,7 @@ class Orchestrator:
                 lore_summary=request.world_setting.lore_summary,
                 max_dialogue_depth=request.max_dialogue_depth,
                 api_key=api_key,
+                previous_error=last_blueprint_error,
             )
             model_calls += 1
             blueprint, last_blueprint_error = self._validate_blueprint(last_raw_blueprint)
@@ -325,7 +393,7 @@ class Orchestrator:
 
         if progress_callback:
             progress_callback("code", "Developer Agent is compiling the Unity controller.")
-        code = run_developer_agent(blueprint, api_key=api_key)
+        code = strip_code_fence(run_developer_agent(blueprint, api_key=api_key))
         model_calls += 1
         logs.append("C# Code compiled via 2.5 Flash.")
 
@@ -338,11 +406,16 @@ class Orchestrator:
         for attempt in range(1, self.max_healing_attempts + 1):
             if qa_report["status"] == "PASSED":
                 break
+            if qa_report["unity_code_valid"]:
+                # Remaining issues are in the blueprint; the healing agent only rewrites C#,
+                # so another model call cannot fix them.
+                logs.append("Self-healing skipped: remaining QA issues are not in the C# code.")
+                break
 
             logs.append(f"Self-healing iteration {attempt} started with {qa_report['issue_count']} issue(s).")
             if progress_callback:
                 progress_callback("self-healing", f"Self-healing iteration {attempt} is repairing issues.")
-            code = run_self_healing_agent(blueprint, code, qa_report, api_key=api_key)
+            code = strip_code_fence(run_self_healing_agent(blueprint, code, qa_report, api_key=api_key))
             model_calls += 1
             healing_attempts += 1
             qa_report = run_qa_agent(blueprint, code, attempt=attempt + 1)

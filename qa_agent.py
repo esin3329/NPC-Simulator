@@ -4,10 +4,36 @@ from typing import Any
 
 
 CODE_FENCE_RE = re.compile(r"^```(?:csharp|cs|c#)?\s*|\s*```$", re.IGNORECASE)
+FENCED_BLOCK_RE = re.compile(r"```[^\n`]*\n(.*?)(?:```|\Z)", re.DOTALL)
+
+# C# string/char literals (verbatim, interpolated, regular) and comments, matched in one pass
+# so that a quote inside a comment or a "//" inside a string is handled correctly.
+_CSHARP_TOKEN_RE = re.compile(
+    r'(?P<comment>//[^\n]*|/\*.*?\*/)'
+    r'|(?P<string>\$?@"(?:""|[^"])*"|@\$"(?:""|[^"])*"|\$?"(?:\\.|[^"\\\n])*"|\'(?:\\.|[^\'\\\n])+\')',
+    re.DOTALL,
+)
 
 
 def strip_code_fence(value: str) -> str:
-    return CODE_FENCE_RE.sub("", str(value or "")).strip()
+    """Return only the C# source, dropping markdown fences and any prose around them."""
+    text = str(value or "")
+    match = FENCED_BLOCK_RE.search(text)
+    if match:
+        return match.group(1).strip()
+    return CODE_FENCE_RE.sub("", text).strip()
+
+
+def _strip_literals(code: str, keep_comments: bool) -> str:
+    """Blank out string/char literals (and optionally comments) so that dialogue text such as
+    "그건... 잊혀진 기록이야" or ":)" does not trigger placeholder or delimiter checks."""
+
+    def replace(match: re.Match) -> str:
+        if match.group("comment") is not None:
+            return match.group(0) if keep_comments else " "
+        return '""'
+
+    return _CSHARP_TOKEN_RE.sub(replace, code)
 
 
 def _parse_json(value: str) -> tuple[dict[str, Any] | None, str | None]:
@@ -100,7 +126,10 @@ def _validate_code(code: str) -> list[str]:
     if not clean_code:
         return ["Generated C# code is empty."]
 
-    issues.extend(_balanced_delimiters(clean_code))
+    code_without_strings = _strip_literals(clean_code, keep_comments=True)
+    code_only = _strip_literals(clean_code, keep_comments=False)
+
+    issues.extend(_balanced_delimiters(code_only))
 
     required_patterns = {
         "UnityEngine import": r"\busing\s+UnityEngine\s*;",
@@ -112,10 +141,11 @@ def _validate_code(code: str) -> list[str]:
         "condition checker": r"\b(CheckCondition|EvaluateCondition|MeetsCondition)\s*\(",
     }
     for label, pattern in required_patterns.items():
-        if not re.search(pattern, clean_code):
+        if not re.search(pattern, code_only):
             issues.append(f"Missing {label} in generated C# code.")
 
-    if re.search(r"\b(TODO|placeholder)\b|\.\.\.", clean_code, re.IGNORECASE):
+    # Comments are kept here on purpose: "// TODO" or "// ..." describes missing work.
+    if re.search(r"\b(TODO|placeholder)\b|\.\.\.", code_without_strings, re.IGNORECASE):
         issues.append("Generated C# code contains placeholder text.")
 
     return issues

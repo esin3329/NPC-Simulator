@@ -1,12 +1,14 @@
+import logging
 import os
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
-from orchestrator import Orchestrator
+from orchestrator import GENERATION_FAILED_MESSAGE, ActiveJobLimitError, Orchestrator
 from schemas import GenerateNpcRequest
 
+logger = logging.getLogger("npc_simulator")
 app = FastAPI(title="XPRIZE NPC Multi-Agent Server")
 orchestrator = Orchestrator()
 BASE_DIR = Path(__file__).resolve().parent
@@ -48,9 +50,12 @@ def generate_npc_assets(body: GenerateNpcRequest):
         )
 
     try:
-        return orchestrator.execute_pipeline(body)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        return orchestrator.run_pipeline_with_limit(body)
+    except ActiveJobLimitError as exc:
+        raise HTTPException(status_code=429, detail=str(exc))
+    except Exception:
+        logger.exception("Synchronous generation failed")
+        raise HTTPException(status_code=500, detail=GENERATION_FAILED_MESSAGE)
 
 
 @app.post("/api/v1/generation-jobs", status_code=202)

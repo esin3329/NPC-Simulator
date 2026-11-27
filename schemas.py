@@ -72,6 +72,19 @@ class NpcBlueprint(BaseModel):
     dialogue_system: DialogueSystem
     runtime_simulation_sandbox: RuntimeSimulationSandbox
 
+    @model_validator(mode="after")
+    def validate_state_contexts(self) -> "NpcBlueprint":
+        # Keep this in sync with qa_agent._validate_blueprint: anything QA rejects about the
+        # blueprint must be rejected here, because self-healing only repairs the C# code.
+        allowed = set(self.npc_profile.base_states)
+        for node_id, node in self.dialogue_system.nodes.items():
+            if node.state_context not in allowed:
+                raise ValueError(
+                    f"dialogue_system.nodes.{node_id}.state_context '{node.state_context}' "
+                    f"is not one of npc_profile.base_states {sorted(allowed)}"
+                )
+        return self
+
 
 DIALOGUE_OPTION_SCHEMA = {
     "type": "OBJECT",

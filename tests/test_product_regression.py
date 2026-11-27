@@ -338,6 +338,128 @@ class ProductRegressionTests(unittest.TestCase):
                 ["valid-generation"],
             )
 
+    def test_qa_ignores_ellipsis_and_parens_inside_dialogue_strings(self):
+        code = VALID_CODE.replace(
+            "enum State { Idle, Trusting }",
+            'enum State { Idle, Trusting }\n    string line = "그건... 잊혀진 기록이야 :)";\n    char open = \'(\';',
+        )
+        report = run_qa_agent(json.dumps(SAMPLE_BLUEPRINT, ensure_ascii=False), code)
+
+        self.assertEqual(report["issues"], [])
+        self.assertEqual(report["status"], "PASSED")
+
+    def test_qa_still_flags_placeholder_comments_and_real_imbalance(self):
+        todo_code = VALID_CODE.replace("public void StartDialogue() {}", "public void StartDialogue() { // TODO\n }")
+        report = run_qa_agent(json.dumps(SAMPLE_BLUEPRINT, ensure_ascii=False), todo_code)
+        self.assertIn("Generated C# code contains placeholder text.", report["issues"])
+
+        broken_code = VALID_CODE.replace("public void ChooseOption(int index) {}", "public void ChooseOption(int index) {")
+        report = run_qa_agent(json.dumps(SAMPLE_BLUEPRINT, ensure_ascii=False), broken_code)
+        self.assertTrue(any(issue.startswith("Unbalanced delimiters") for issue in report["issues"]))
+
+    def test_strip_code_fence_drops_prose_around_fenced_block(self):
+        from qa_agent import strip_code_fence
+
+        wrapped = f"Here is the controller:\n{VALID_CODE}\nHope this helps!"
+        cleaned = strip_code_fence(wrapped)
+
+        self.assertTrue(cleaned.startswith("using UnityEngine;"))
+        self.assertNotIn("```", cleaned)
+        self.assertNotIn("Hope this helps", cleaned)
+
+    def test_blueprint_with_unknown_state_context_is_retried_with_feedback(self):
+        bad_blueprint = json.loads(json.dumps(SAMPLE_BLUEPRINT))
+        bad_blueprint["dialogue_system"]["nodes"]["trust"]["state_context"] = "Angry"
+        responses = [json.dumps(bad_blueprint, ensure_ascii=False), json.dumps(SAMPLE_BLUEPRINT, ensure_ascii=False)]
+
+        with tempfile.TemporaryDirectory(dir=".") as tmpdir:
+            orchestrator = Orchestrator(output_dir=Path(tmpdir))
+            with patch.object(orchestrator_module, "run_design_agent", side_effect=responses) as design, patch.object(
+                orchestrator_module, "run_developer_agent", return_value=VALID_CODE
+            ), patch.object(orchestrator_module, "run_bulk_generator", return_value=[]):
+                result = orchestrator.execute_pipeline(GenerateNpcRequest(user_prompt="테스트 NPC"))
+
+        self.assertEqual(result["status"], "SUCCESS")
+        self.assertEqual(design.call_count, 2)
+        self.assertIsNone(design.call_args_list[0].kwargs["previous_error"])
+        self.assertIn("Angry", design.call_args_list[1].kwargs["previous_error"])
+
+    def test_self_healing_is_skipped_when_only_blueprint_issues_remain(self):
+        with tempfile.TemporaryDirectory(dir=".") as tmpdir:
+            orchestrator = Orchestrator(output_dir=Path(tmpdir))
+            blueprint_only_failure = run_qa_agent("{}", VALID_CODE)
+            with patch.object(
+                orchestrator_module, "run_design_agent", return_value=json.dumps(SAMPLE_BLUEPRINT, ensure_ascii=False)
+            ), patch.object(orchestrator_module, "run_developer_agent", return_value=VALID_CODE), patch.object(
+                orchestrator_module, "run_qa_agent", return_value=blueprint_only_failure
+            ), patch.object(orchestrator_module, "run_self_healing_agent") as healer, patch.object(
+                orchestrator_module, "run_bulk_generator", return_value=[]
+            ):
+                result = orchestrator.execute_pipeline(GenerateNpcRequest(user_prompt="테스트 NPC"))
+
+        healer.assert_not_called()
+        self.assertEqual(result["status"], "NEEDS_REVIEW")
+        self.assertEqual(result["metrics"]["healing_attempts"], 0)
+
+    def test_sync_generate_shares_active_job_limit(self):
+        with tempfile.TemporaryDirectory(dir=".") as tmpdir:
+            test_orchestrator = Orchestrator(output_dir=Path(tmpdir))
+            test_orchestrator.max_active_jobs = 0
+            with patch("main.orchestrator", test_orchestrator), patch.dict(
+                os.environ, {"GEMINI_API_KEY": "test-key", "GOOGLE_API_KEY": ""}, clear=False
+            ), patch.object(orchestrator_module, "run_design_agent") as design:
+                with self.assertRaises(HTTPException) as raised:
+                    generate_npc_assets(GenerateNpcRequest(user_prompt="테스트 NPC"))
+
+        self.assertEqual(raised.exception.status_code, 429)
+        design.assert_not_called()
+        self.assertEqual(test_orchestrator._active_sync_runs, 0)
+
+    def test_sync_generate_hides_internal_error_details(self):
+        with tempfile.TemporaryDirectory(dir=".") as tmpdir:
+            test_orchestrator = Orchestrator(output_dir=Path(tmpdir))
+            with patch("main.orchestrator", test_orchestrator), patch.dict(
+                os.environ, {"GEMINI_API_KEY": "test-key", "GOOGLE_API_KEY": ""}, clear=False
+            ), patch.object(
+                orchestrator_module, "run_design_agent", side_effect=RuntimeError("secret upstream detail")
+            ), self.assertLogs("npc_simulator", level="ERROR"):
+                with self.assertRaises(HTTPException) as raised:
+                    generate_npc_assets(GenerateNpcRequest(user_prompt="테스트 NPC"))
+
+        self.assertEqual(raised.exception.status_code, 500)
+        self.assertNotIn("secret upstream detail", raised.exception.detail)
+        self.assertEqual(test_orchestrator._active_sync_runs, 0)
+
+    def test_finished_jobs_are_pruned(self):
+        with tempfile.TemporaryDirectory(dir=".") as tmpdir:
+            orchestrator = Orchestrator(output_dir=Path(tmpdir))
+        orchestrator.max_finished_jobs = 2
+        for index in range(5):
+            job_id = f"job-{index}"
+            orchestrator._jobs[job_id] = {"job_id": job_id, "status": "RUNNING"}
+            orchestrator._set_job(job_id, status="COMPLETED", result={"large": "payload"})
+        orchestrator._jobs["running"] = {"job_id": "running", "status": "RUNNING"}
+
+        with orchestrator._jobs_lock:
+            orchestrator._prune_jobs_locked()
+
+        self.assertEqual(sorted(orchestrator._jobs), ["job-3", "job-4", "running"])
+
+        orchestrator.job_ttl_seconds = -1
+        with orchestrator._jobs_lock:
+            orchestrator._prune_jobs_locked()
+        self.assertEqual(list(orchestrator._jobs), ["running"])
+
+    def test_persistence_defaults_off_on_cloud_run(self):
+        env = {key: value for key, value in os.environ.items() if key != "PERSIST_GENERATIONS"}
+        with patch.dict(os.environ, {**env, "K_SERVICE": "npc-simulator"}, clear=True):
+            self.assertFalse(Orchestrator(output_dir=Path("unused")).persist_generations)
+        with patch.dict(os.environ, {**env, "K_SERVICE": "npc-simulator", "PERSIST_GENERATIONS": "true"}, clear=True):
+            self.assertTrue(Orchestrator(output_dir=Path("unused")).persist_generations)
+        env.pop("K_SERVICE", None)
+        with patch.dict(os.environ, env, clear=True):
+            self.assertTrue(Orchestrator(output_dir=Path("unused")).persist_generations)
+
 
 if __name__ == "__main__":
     unittest.main()
